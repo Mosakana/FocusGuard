@@ -69,6 +69,10 @@ public partial class App : Application
                 .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<FocusGuardDbContext>>()
                 .CreateDbContext();
             await dbContext.Database.EnsureCreatedAsync();
+
+            // Run Phase 2+ migrations (CREATE TABLE IF NOT EXISTS)
+            var migrator = Services.GetRequiredService<FocusGuard.Core.Data.DatabaseMigrator>();
+            await migrator.MigrateAsync();
         }
 
         var mainWindow = Services.GetRequiredService<MainWindow>();
