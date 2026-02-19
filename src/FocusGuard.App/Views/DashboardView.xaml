@@ -1,0 +1,90 @@
+<UserControl x:Class="FocusGuard.App.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:FocusGuard.App.Converters">
+    <UserControl.Resources>
+        <converters:HexToColorConverter x:Key="HexToColorConverter" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+            <!-- Heading -->
+            <TextBlock Text="Dashboard" Style="{StaticResource HeadingStyle}" />
+
+            <!-- Status Card -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Text="Current Status" Style="{StaticResource SubheadingStyle}" />
+                    <TextBlock Text="{Binding StatusText}" Style="{StaticResource BodyTextStyle}"
+                               FontSize="15" Margin="0,8,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Profile Quick-Start -->
+            <TextBlock Text="Profiles" Style="{StaticResource SubheadingStyle}" Margin="0,8,0,12" />
+
+            <ItemsControl ItemsSource="{Binding Profiles}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{StaticResource SurfaceBrush}" CornerRadius="10"
+                                Padding="16" Margin="0,0,12,12" Width="200">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="12" Height="12"
+                                             Fill="{Binding Color, Converter={StaticResource HexToColorConverter}}"
+                                             Margin="0,0,8,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextBrush}" />
+                                </StackPanel>
+                                <TextBlock Margin="0,8,0,0" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12">
+                                    <Run Text="{Binding WebsiteCount, Mode=OneWay}" />
+                                    <Run Text=" websites, " />
+                                    <Run Text="{Binding AppCount, Mode=OneWay}" />
+                                    <Run Text=" apps" />
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Coming Soon Placeholders -->
+            <TextBlock Text="Coming Soon" Style="{StaticResource SubheadingStyle}" Margin="0,16,0,12" />
+
+            <WrapPanel>
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="20" Margin="0,0,12,12"
+                        Width="200" Opacity="0.5">
+                    <StackPanel>
+                        <TextBlock Text="&#x1F4C5; Calendar" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                        <TextBlock Text="Schedule focus sessions" FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="20" Margin="0,0,12,12"
+                        Width="200" Opacity="0.5">
+                    <StackPanel>
+                        <TextBlock Text="&#x1F4CA; Statistics" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                        <TextBlock Text="Track your productivity" FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="20" Margin="0,0,12,12"
+                        Width="200" Opacity="0.5">
+                    <StackPanel>
+                        <TextBlock Text="&#x23F1; Pomodoro Timer" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                        <TextBlock Text="Work/break intervals" FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+            </WrapPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
