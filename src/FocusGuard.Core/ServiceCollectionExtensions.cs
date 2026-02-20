@@ -3,6 +3,7 @@ using FocusGuard.Core.Configuration;
 using FocusGuard.Core.Data;
 using FocusGuard.Core.Data.Repositories;
 using FocusGuard.Core.Security;
+using FocusGuard.Core.Sessions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,6 +23,7 @@ public static class ServiceCollectionExtensions
         // Repositories
         services.AddScoped<IProfileRepository, ProfileRepository>();
         services.AddScoped<ISettingsRepository, SettingsRepository>();
+        services.AddSingleton<IFocusSessionRepository, FocusSessionRepository>();
 
         // Blocking engines
         services.AddSingleton<IWebsiteBlocker, HostsFileWebsiteBlocker>();
@@ -31,6 +33,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PasswordGenerator>();
         services.AddSingleton<PasswordValidator>();
         services.AddSingleton<MasterKeyService>();
+
+        // Sessions
+        services.AddSingleton<IFocusSessionManager, FocusSessionManager>();
 
         return services;
     }
