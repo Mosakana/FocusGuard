@@ -68,4 +68,12 @@ public class FocusSessionRepository : IFocusSessionRepository
             .Take(count)
             .ToListAsync();
     }
+
+    public async Task<List<FocusSessionEntity>> GetOrphanedSessionsAsync()
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.FocusSessions
+            .Where(s => s.State != "Ended" && s.State != "Idle")
+            .ToListAsync();
+    }
 }

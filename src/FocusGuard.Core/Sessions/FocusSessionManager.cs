@@ -111,6 +111,47 @@ public class FocusSessionManager : IFocusSessionManager, IDisposable
         }
     }
 
+    public async Task ResumeSessionAsync(Guid sessionId, int remainingMinutes)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (CurrentState != FocusSessionState.Idle)
+                throw new InvalidOperationException("Cannot resume a session while one is already active.");
+
+            var entity = await _sessionRepository.GetByIdAsync(sessionId)
+                ?? throw new InvalidOperationException($"Session with ID '{sessionId}' not found.");
+
+            var profile = await _profileRepository.GetByIdAsync(entity.ProfileId);
+            _profileName = profile?.Name ?? "Unknown";
+
+            // Re-generate password (old one was in-memory only, lost on crash)
+            var difficulty = await LoadPasswordDifficultyAsync();
+            var length = await LoadPasswordLengthAsync();
+            _unlockPassword = _passwordGenerator.Generate(length, difficulty);
+
+            _currentEntity = entity;
+            _pomodoroEnabled = false; // Pomodoro state is lost on crash — resume as simple timer
+            _pomodoroCompletedCount = entity.PomodoroCompletedCount;
+
+            // Start timer for remaining duration
+            _sessionTimer = new System.Timers.Timer(remainingMinutes * 60_000.0);
+            _sessionTimer.AutoReset = false;
+            _sessionTimer.Elapsed += async (_, _) => await EndSessionNaturallyAsync();
+            _sessionTimer.Start();
+
+            CurrentState = FocusSessionState.Working;
+            _logger.LogInformation("Resumed session {SessionId}, Profile={Profile}, Remaining={Remaining}min, NewPassword generated",
+                sessionId, _profileName, remainingMinutes);
+
+            StateChanged?.Invoke(this, CurrentState);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     public async Task<bool> TryUnlockAsync(string password)
     {
         await _lock.WaitAsync();

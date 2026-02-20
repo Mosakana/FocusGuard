@@ -9,4 +9,5 @@ public interface IFocusSessionRepository
     Task<FocusSessionEntity?> GetByIdAsync(Guid id);
     Task<FocusSessionEntity?> GetActiveSessionAsync();
     Task<List<FocusSessionEntity>> GetRecentAsync(int count = 10);
+    Task<List<FocusSessionEntity>> GetOrphanedSessionsAsync();
 }

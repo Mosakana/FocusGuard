@@ -14,4 +14,8 @@ public static class SettingsKeys
     public const string PomodoroAutoStart = "pomodoro.auto_start";
     public const string SoundEnabled = "notifications.sound_enabled";
     public const string MinimizeToTray = "app.minimize_to_tray";
+
+    // Phase 5: Hardening
+    public const string StrictModeEnabled = "app.strict_mode_enabled";
+    public const string AutoStartEnabled = "app.auto_start_enabled";
 }

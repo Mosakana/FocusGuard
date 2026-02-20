@@ -24,6 +24,7 @@ dotnet publish src/FocusGuard.App -c Release -r win-x64 --self-contained -p:Publ
 FocusGuard.sln
 ├── src/FocusGuard.Core        (net8.0, class library — no UI dependency)
 ├── src/FocusGuard.App         (net8.0-windows, WPF WinExe — references Core)
+├── src/FocusGuard.Watchdog    (net8.0-windows, WinExe — standalone watchdog process)
 └── tests/FocusGuard.Core.Tests (net8.0, xUnit test project — references Core)
 ```
 
@@ -91,6 +92,28 @@ FocusGuard.sln
 - `DomainHelper`: normalize (strip protocol/path, lowercase), expand (add www.), validate (regex)
 - `ProcessHelper`: normalize (remove .exe, lowercase), list running processes
 
+### Global Exception Handling & Crash Recovery
+- `App.xaml.cs` installs 3 global handlers: `DispatcherUnhandledException`, `AppDomain.UnhandledException`, `TaskScheduler.UnobservedTaskException`
+- `EmergencyCleanup()` removes hosts file entries and stops application blocker on crash
+- `ICrashRecoveryService.RecoverAsync()` runs at startup: cleans stale hosts entries + marks orphaned sessions as Ended
+- `IFocusSessionRepository.GetOrphanedSessionsAsync()` finds sessions in Working/ShortBreak/LongBreak state
+- Named `Mutex("FocusGuard_SingleInstance")` enforces single instance
+
+### Strict Mode & Hardening
+- `IStrictModeService` — persists `app.strict_mode_enabled` setting. Can only toggle when `FocusSessionState.Idle`
+- `MainWindow.OnClosing` cancels close when strict mode enabled + session active
+- `IHeartbeatService` — writes `heartbeat.json` (atomic via temp file) every 5s with PID, session ID, timestamp
+- `IWatchdogLauncher` — starts/stops `FocusGuard.Watchdog.exe` from `AppContext.BaseDirectory`
+- `FocusGuard.Watchdog` (separate process) — monitors heartbeat, restarts main app with `--recovered` if stale (>15s) + active session, max 3 attempts
+- `ISessionRecoveryService.TryRecoverSessionAsync()` — on `--recovered` startup: resumes session with remaining time + new password, or marks expired sessions as ended
+- `IFocusSessionManager.ResumeSessionAsync(sessionId, remainingMinutes)` — reloads entity, generates new password, starts timer for remaining time
+
+### Auto-Start & Portable Mode
+- `IAutoStartService` — reads/writes `HKCU\...\Run\FocusGuard` registry value with `--minimized` flag
+- `AppPaths.IsPortableMode` — checks for `portable.marker` file in `AppContext.BaseDirectory`
+- Portable mode: DB, logs, heartbeat go to `{appDir}/data/` instead of `%APPDATA%\FocusGuard\`
+- Auto-start is a no-op in portable mode
+
 ### UI Theme
 - Dark theme defined in `Resources/Theme.xaml`
 - Key colors: Background `#1E1E2E`, Surface `#2A2A3E`, Primary `#4A90D9`, Text `#ECEFF4`
@@ -111,6 +134,8 @@ FocusGuard.sln
 | `FocusGuard.App.Views` | All XAML Views |
 | `FocusGuard.App.Services` | NavigationService, DialogService, BlockingOrchestrator |
 | `FocusGuard.App.Models` | UI display models (ProfileSummary, ProfileListItem) |
+| `FocusGuard.Core.Hardening` | Strict mode, heartbeat, watchdog launcher, auto-start |
+| `FocusGuard.Core.Recovery` | Crash recovery, session recovery |
 | `FocusGuard.App.Converters` | WPF value converters |
 
 ## File Layout
@@ -146,7 +171,23 @@ src/FocusGuard.Core/
 │   ├── PasswordGenerator.cs           # Cryptographic random password generation (RandomNumberGenerator)
 │   ├── PasswordValidator.cs           # Exact ordinal string comparison
 │   ├── MasterKeyService.cs            # Master recovery key: generate (SHA-256+salt), validate, setup check
-│   └── SettingsKeys.cs                # Constants for all settings keys
+│   └── SettingsKeys.cs                # Constants for all settings keys (incl. Phase 5: strict_mode, auto_start)
+├── Hardening/
+│   ├── IStrictModeService.cs          # Toggle strict mode (prevents close during session)
+│   ├── StrictModeService.cs           # Persists to settings, guards against toggle during session
+│   ├── HeartbeatData.cs               # Heartbeat JSON contract: PID, timestamp, session info
+│   ├── HeartbeatHelper.cs             # Static read/write/delete for heartbeat.json (atomic writes)
+│   ├── IHeartbeatService.cs           # Start/stop/update heartbeat timer
+│   ├── HeartbeatService.cs            # Writes heartbeat every 5s via System.Threading.Timer
+│   ├── IWatchdogLauncher.cs           # Launch/stop watchdog process
+│   ├── WatchdogLauncher.cs            # Starts FocusGuard.Watchdog.exe with runas verb
+│   ├── IAutoStartService.cs           # Enable/disable auto-start on boot
+│   └── AutoStartService.cs            # HKCU registry Run key, portable mode guard
+├── Recovery/
+│   ├── ICrashRecoveryService.cs       # Cleanup hosts + orphaned sessions
+│   ├── CrashRecoveryService.cs        # Runs at startup, marks orphaned sessions as Ended
+│   ├── ISessionRecoveryService.cs     # Resume session after crash
+│   └── SessionRecoveryService.cs      # Checks remaining time, calls ResumeSessionAsync or marks ended
 ├── Sessions/
 │   ├── FocusSessionState.cs           # Enum: Idle, Working, ShortBreak, LongBreak, Ended
 │   ├── FocusSessionInfo.cs            # Immutable snapshot record for current session
@@ -183,6 +224,15 @@ src/FocusGuard.App/
     ├── BoolToVisibilityConverter.cs    # bool → Visibility
     └── InverseBoolConverter.cs         # bool → !bool
 
+src/FocusGuard.Watchdog/
+├── FocusGuard.Watchdog.csproj          # net8.0-windows WinExe, no Core dependency
+├── app.manifest                        # requireAdministrator
+└── Program.cs                          # Monitor loop: read heartbeat, restart on stale + active session
+
+installer/
+├── FocusGuard.iss                      # Inno Setup 6 script
+└── build.ps1                           # PowerShell: build, test, publish, package
+
 tests/FocusGuard.Core.Tests/
 ├── Data/
 │   └── ProfileRepositoryTests.cs       # CRUD, preset protection, duplicate name (InMemory provider)
@@ -193,8 +243,14 @@ tests/FocusGuard.Core.Tests/
 │   ├── PasswordGeneratorTests.cs        # Length, char sets, group guarantees, uniqueness, edge cases
 │   ├── PasswordValidatorTests.cs        # Exact match, case sensitivity, nulls, whitespace
 │   └── MasterKeyServiceTests.cs         # Generate/validate, hash storage, case-insensitive hex, setup check
+├── Hardening/
+│   ├── StrictModeServiceTests.cs        # Toggle, persistence, session guard, throws during session
+│   └── HeartbeatHelperTests.cs          # Write/read round-trip, delete, null on missing
+├── Recovery/
+│   ├── CrashRecoveryServiceTests.cs     # Orphaned session cleanup (Working/ShortBreak/LongBreak), hosts cleanup
+│   └── SessionRecoveryServiceTests.cs   # No active → false, expired → ended, active → resumes
 └── Sessions/
-    └── FocusSessionManagerTests.cs      # State transitions, unlock, emergency unlock, pomodoro, persistence, events
+    └── FocusSessionManagerTests.cs      # State transitions, unlock, emergency unlock, pomodoro, persistence, events, ResumeSessionAsync
 ```
 
 ## Development Phases
@@ -202,14 +258,12 @@ tests/FocusGuard.Core.Tests/
 | Phase | Status | Description |
 |-------|--------|-------------|
 | 1 — Core Foundation | Done | Scaffolding, profile CRUD, blocking engines, WPF shell |
-| 2 — Focus Session & Timer | In Progress | Session lifecycle, password unlock, Pomodoro, tray, overlay |
-| 3 — Calendar & Scheduling | Planned | Calendar UI, drag-and-drop scheduling, recurring sessions |
-| 4 — Statistics & Polish | Planned | Charts, goals, streaks, notifications, auto-start |
-| 5 — Hardening | Planned | Anti-kill strict mode, installer (Inno Setup) |
+| 2 — Focus Session & Timer | Done | Session lifecycle, password unlock, Pomodoro, tray, overlay |
+| 3 — Calendar & Scheduling | Done | Calendar UI, drag-and-drop scheduling, recurring sessions |
+| 4 — Statistics & Polish | Done | Charts, goals, streaks, notifications, auto-start |
+| 5 — Hardening | Done | Global exception handling, crash recovery, strict mode, watchdog, auto-start, portable mode, Inno Setup installer |
 
 Phase implementation plans: `docs/validated-sprouting-anchor.md` (Phase 1), `docs/focus-session-timer.md` (Phase 2).
-
-Phase 2 progress: Steps 1–4 done (DB schema evolution + Security Layer + Focus Session State Machine + BlockingOrchestrator Integration), Steps 5–12 pending.
 
 ## Conventions
 

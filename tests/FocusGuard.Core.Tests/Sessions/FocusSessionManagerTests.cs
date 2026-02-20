@@ -511,6 +511,103 @@ public class FocusSessionManagerTests : IDisposable
 
     #endregion
 
+    #region ResumeSession
+
+    [Fact]
+    public async Task ResumeSession_TransitionsToWorking()
+    {
+        var entity = CreateSessionEntity("Working");
+        _sessionRepoMock.Setup(r => r.GetByIdAsync(entity.Id))
+            .ReturnsAsync(entity);
+
+        await _manager.ResumeSessionAsync(entity.Id, 15);
+
+        Assert.Equal(FocusSessionState.Working, _manager.CurrentState);
+    }
+
+    [Fact]
+    public async Task ResumeSession_GeneratesNewPassword()
+    {
+        var entity = CreateSessionEntity("Working");
+        _sessionRepoMock.Setup(r => r.GetByIdAsync(entity.Id))
+            .ReturnsAsync(entity);
+
+        await _manager.ResumeSessionAsync(entity.Id, 15);
+
+        var password = _manager.GetUnlockPassword();
+        Assert.NotNull(password);
+        Assert.NotEmpty(password);
+    }
+
+    [Fact]
+    public async Task ResumeSession_FiresStateChanged()
+    {
+        var entity = CreateSessionEntity("Working");
+        _sessionRepoMock.Setup(r => r.GetByIdAsync(entity.Id))
+            .ReturnsAsync(entity);
+
+        FocusSessionState? firedState = null;
+        _manager.StateChanged += (_, state) => firedState = state;
+
+        await _manager.ResumeSessionAsync(entity.Id, 15);
+
+        Assert.Equal(FocusSessionState.Working, firedState);
+    }
+
+    [Fact]
+    public async Task ResumeSession_ThrowsWhenAlreadyActive()
+    {
+        await _manager.StartSessionAsync(_testProfile.Id, 25);
+
+        var entity = CreateSessionEntity("Working");
+        _sessionRepoMock.Setup(r => r.GetByIdAsync(entity.Id))
+            .ReturnsAsync(entity);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _manager.ResumeSessionAsync(entity.Id, 15));
+    }
+
+    [Fact]
+    public async Task ResumeSession_ThrowsWhenSessionNotFound()
+    {
+        var badId = Guid.NewGuid();
+        _sessionRepoMock.Setup(r => r.GetByIdAsync(badId))
+            .ReturnsAsync((FocusSessionEntity?)null);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _manager.ResumeSessionAsync(badId, 15));
+    }
+
+    [Fact]
+    public async Task ResumeSession_CanUnlockWithNewPassword()
+    {
+        var entity = CreateSessionEntity("Working");
+        _sessionRepoMock.Setup(r => r.GetByIdAsync(entity.Id))
+            .ReturnsAsync(entity);
+
+        await _manager.ResumeSessionAsync(entity.Id, 15);
+        var password = _manager.GetUnlockPassword()!;
+        var result = await _manager.TryUnlockAsync(password);
+
+        Assert.True(result);
+        Assert.Equal(FocusSessionState.Idle, _manager.CurrentState);
+    }
+
+    private FocusSessionEntity CreateSessionEntity(string state)
+    {
+        return new FocusSessionEntity
+        {
+            Id = Guid.NewGuid(),
+            ProfileId = _testProfile.Id,
+            StartTime = DateTime.UtcNow.AddMinutes(-10),
+            PlannedDurationMinutes = 25,
+            State = state,
+            PomodoroCompletedCount = 0
+        };
+    }
+
+    #endregion
+
     #region CurrentSession Info
 
     [Fact]

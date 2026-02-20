@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FocusGuard.Core.Blocking;
 using FocusGuard.Core.Data.Repositories;
+using FocusGuard.Core.Hardening;
 using FocusGuard.Core.Sessions;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +13,9 @@ public class BlockingOrchestrator
     private readonly IApplicationBlocker _applicationBlocker;
     private readonly IProfileRepository _profileRepository;
     private readonly IFocusSessionManager _sessionManager;
+    private readonly IStrictModeService _strictModeService;
+    private readonly IHeartbeatService _heartbeatService;
+    private readonly IWatchdogLauncher _watchdogLauncher;
     private readonly ILogger<BlockingOrchestrator> _logger;
 
     public bool IsActive { get; private set; }
@@ -24,12 +28,18 @@ public class BlockingOrchestrator
         IApplicationBlocker applicationBlocker,
         IProfileRepository profileRepository,
         IFocusSessionManager sessionManager,
+        IStrictModeService strictModeService,
+        IHeartbeatService heartbeatService,
+        IWatchdogLauncher watchdogLauncher,
         ILogger<BlockingOrchestrator> logger)
     {
         _websiteBlocker = websiteBlocker;
         _applicationBlocker = applicationBlocker;
         _profileRepository = profileRepository;
         _sessionManager = sessionManager;
+        _strictModeService = strictModeService;
+        _heartbeatService = heartbeatService;
+        _watchdogLauncher = watchdogLauncher;
         _logger = logger;
 
         _sessionManager.StateChanged += OnSessionStateChanged;
@@ -98,10 +108,23 @@ public class BlockingOrchestrator
                 case FocusSessionState.Working when !IsActive:
                     var session = _sessionManager.CurrentSession;
                     if (session is not null)
+                    {
                         await ActivateProfileAsync(session.ProfileId);
+
+                        // Start heartbeat + watchdog if strict mode is enabled
+                        if (await _strictModeService.IsEnabledAsync())
+                        {
+                            _heartbeatService.Start(session.SessionId, session.ProfileId);
+                            _watchdogLauncher.Launch();
+                        }
+                    }
                     break;
                 case FocusSessionState.Idle when IsActive:
                     await DeactivateAsync();
+
+                    // Stop heartbeat + watchdog
+                    _heartbeatService.Stop();
+                    _watchdogLauncher.SignalStop();
                     break;
                 // ShortBreak, LongBreak → blocking remains active
             }

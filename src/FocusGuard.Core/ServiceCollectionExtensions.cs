@@ -2,6 +2,8 @@ using FocusGuard.Core.Blocking;
 using FocusGuard.Core.Configuration;
 using FocusGuard.Core.Data;
 using FocusGuard.Core.Data.Repositories;
+using FocusGuard.Core.Hardening;
+using FocusGuard.Core.Recovery;
 using FocusGuard.Core.Security;
 using FocusGuard.Core.Sessions;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +38,16 @@ public static class ServiceCollectionExtensions
 
         // Sessions
         services.AddSingleton<IFocusSessionManager, FocusSessionManager>();
+
+        // Recovery
+        services.AddSingleton<ICrashRecoveryService, CrashRecoveryService>();
+
+        // Hardening
+        services.AddSingleton<IStrictModeService, StrictModeService>();
+        services.AddSingleton<IHeartbeatService, HeartbeatService>();
+        services.AddSingleton<IWatchdogLauncher, WatchdogLauncher>();
+        services.AddSingleton<IAutoStartService, AutoStartService>();
+        services.AddSingleton<ISessionRecoveryService, SessionRecoveryService>();
 
         return services;
     }
