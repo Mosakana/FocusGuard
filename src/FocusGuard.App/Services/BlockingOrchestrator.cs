@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FocusGuard.Core.Blocking;
 using FocusGuard.Core.Data.Repositories;
+using FocusGuard.Core.Sessions;
 using Microsoft.Extensions.Logging;
 
 namespace FocusGuard.App.Services;
@@ -10,22 +11,28 @@ public class BlockingOrchestrator
     private readonly IWebsiteBlocker _websiteBlocker;
     private readonly IApplicationBlocker _applicationBlocker;
     private readonly IProfileRepository _profileRepository;
+    private readonly IFocusSessionManager _sessionManager;
     private readonly ILogger<BlockingOrchestrator> _logger;
 
     public bool IsActive { get; private set; }
     public string? ActiveProfileName { get; private set; }
     public Guid? ActiveProfileId { get; private set; }
+    public IFocusSessionManager SessionManager => _sessionManager;
 
     public BlockingOrchestrator(
         IWebsiteBlocker websiteBlocker,
         IApplicationBlocker applicationBlocker,
         IProfileRepository profileRepository,
+        IFocusSessionManager sessionManager,
         ILogger<BlockingOrchestrator> logger)
     {
         _websiteBlocker = websiteBlocker;
         _applicationBlocker = applicationBlocker;
         _profileRepository = profileRepository;
+        _sessionManager = sessionManager;
         _logger = logger;
+
+        _sessionManager.StateChanged += OnSessionStateChanged;
     }
 
     public async Task ActivateProfileAsync(Guid profileId)
@@ -80,5 +87,28 @@ public class BlockingOrchestrator
         IsActive = false;
 
         _logger.LogInformation("Deactivated blocking for profile: {Name}", previousName);
+    }
+
+    private async void OnSessionStateChanged(object? sender, FocusSessionState state)
+    {
+        try
+        {
+            switch (state)
+            {
+                case FocusSessionState.Working when !IsActive:
+                    var session = _sessionManager.CurrentSession;
+                    if (session is not null)
+                        await ActivateProfileAsync(session.ProfileId);
+                    break;
+                case FocusSessionState.Idle when IsActive:
+                    await DeactivateAsync();
+                    break;
+                // ShortBreak, LongBreak → blocking remains active
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling session state change to {State}", state);
+        }
     }
 }

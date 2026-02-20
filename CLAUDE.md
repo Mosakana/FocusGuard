@@ -40,7 +40,7 @@ FocusGuard.sln
 - Core services registered via `ServiceCollectionExtensions.AddFocusGuardCore()`
 - App services registered in `App.xaml.cs` `ConfigureServices`
 - `IDbContextFactory<FocusGuardDbContext>` pattern (not direct DbContext injection) — each operation gets a fresh context to avoid staleness in long-running WPF
-- Repositories: Scoped. Blocking engines: Singleton. Security services: Singleton. ViewModels: Transient (except MainWindowViewModel: Singleton)
+- Repositories: Scoped (except `IFocusSessionRepository`: Singleton — consumed by singleton manager, safe via `IDbContextFactory`). Blocking engines: Singleton. Security services: Singleton. Session manager: Singleton. ViewModels: Transient (except MainWindowViewModel: Singleton)
 
 ### Database (SQLite + EF Core)
 - Database path: `%APPDATA%\FocusGuard\focusguard.db`
@@ -61,6 +61,29 @@ FocusGuard.sln
   - `IsSetupCompleteAsync()`: checks if `SettingsKeys.MasterKeyHash` exists
 - `SettingsKeys` — Constants for all settings keys (security, session, pomodoro, notifications, app)
 - **Important .NET 8 note:** Use `Convert.ToHexString().ToLowerInvariant()` (not `ToHexStringLower` which is .NET 9+)
+
+### Focus Session State Machine
+- `FocusSessionState` enum: `Idle`, `Working`, `ShortBreak`, `LongBreak`, `Ended`
+- `FocusSessionManager` (Singleton, implements `IFocusSessionManager`) — core session lifecycle
+  - `StartSessionAsync(profileId, durationMinutes, pomodoroEnabled)`: loads password settings from `ISettingsRepository` (defaults: Medium/30), generates password, creates `FocusSessionEntity`, starts `System.Timers.Timer`, transitions Idle → Working
+  - `TryUnlockAsync(password)`: validates via `PasswordValidator`, ends session early if correct
+  - `EmergencyUnlockAsync(masterKey)`: validates via `MasterKeyService`, ends session early if correct
+  - `EndSessionNaturallyAsync()`: called when timer expires, ends session normally
+  - `AdvancePomodoroInterval()`: Working → ShortBreak/LongBreak → Working cycle, long break every N intervals (default 4)
+  - `GetUnlockPassword()`: returns the in-memory password (never persisted, lost on crash)
+  - Events: `StateChanged`, `SessionEnded`, `PomodoroIntervalChanged`
+- Thread safety via `SemaphoreSlim(1,1)` — timer callbacks arrive on thread pool threads
+- `FocusSessionInfo` — immutable snapshot record: SessionId, ProfileId, ProfileName, State, Elapsed, TotalPlanned, CurrentIntervalRemaining, PomodoroCompletedCount, UnlockPassword
+- Session end (common path): updates entity with EndTime, ActualDurationMinutes, WasUnlockedEarly, State="Ended", saves to DB, clears in-memory state
+
+### BlockingOrchestrator (Session ↔ Blocking Bridge)
+- `BlockingOrchestrator` subscribes to `IFocusSessionManager.StateChanged` in constructor
+- `Working` (when `!IsActive`) → `ActivateProfileAsync(session.ProfileId)` — auto-activates blocking
+- `Idle` (when `IsActive`) → `DeactivateAsync()` — auto-deactivates blocking
+- `ShortBreak` / `LongBreak` → no action, blocking remains active during breaks
+- Guards prevent double-activation on Pomodoro Working→Break→Working cycles
+- `async void` event handler with try-catch to prevent unobserved exceptions
+- Exposes `SessionManager` property for UI access to `IFocusSessionManager`
 
 ### Blocking Engines
 - **Website:** `HostsFileWebsiteBlocker` — modifies `C:\Windows\System32\drivers\etc\hosts` with marker comments (`# >>> FocusGuard START/END <<<`). Atomic writes via temp file. Thread-safe via `SemaphoreSlim`. DNS flush via `ipconfig /flushdns`.
@@ -83,6 +106,7 @@ FocusGuard.sln
 | `FocusGuard.Core.Blocking` | Website & application blocking engines |
 | `FocusGuard.Core.Configuration` | AppPaths (data dir, DB path, log dir) |
 | `FocusGuard.Core.Security` | PasswordGenerator, PasswordValidator, MasterKeyService, SettingsKeys |
+| `FocusGuard.Core.Sessions` | FocusSessionManager, FocusSessionState, FocusSessionInfo |
 | `FocusGuard.App.ViewModels` | All ViewModels |
 | `FocusGuard.App.Views` | All XAML Views |
 | `FocusGuard.App.Services` | NavigationService, DialogService, BlockingOrchestrator |
@@ -104,7 +128,9 @@ src/FocusGuard.Core/
 │   │   ├── IProfileRepository.cs      # GetAll, GetById, Create, Update, Delete, Exists
 │   │   ├── ProfileRepository.cs       # IDbContextFactory-based implementation
 │   │   ├── ISettingsRepository.cs     # Get, Set, Exists — key-value settings access
-│   │   └── SettingsRepository.cs      # IDbContextFactory-based implementation
+│   │   ├── SettingsRepository.cs      # IDbContextFactory-based implementation
+│   │   ├── IFocusSessionRepository.cs # Create, Update, GetById, GetActiveSession, GetRecent
+│   │   └── FocusSessionRepository.cs  # IDbContextFactory-based implementation (Singleton-safe)
 │   ├── DatabaseMigrator.cs            # CREATE TABLE IF NOT EXISTS for Phase 2+ tables
 │   └── FocusGuardDbContext.cs          # DbSet<ProfileEntity/FocusSessionEntity/SettingEntity>, seeds 3 presets
 ├── Blocking/
@@ -121,6 +147,11 @@ src/FocusGuard.Core/
 │   ├── PasswordValidator.cs           # Exact ordinal string comparison
 │   ├── MasterKeyService.cs            # Master recovery key: generate (SHA-256+salt), validate, setup check
 │   └── SettingsKeys.cs                # Constants for all settings keys
+├── Sessions/
+│   ├── FocusSessionState.cs           # Enum: Idle, Working, ShortBreak, LongBreak, Ended
+│   ├── FocusSessionInfo.cs            # Immutable snapshot record for current session
+│   ├── IFocusSessionManager.cs        # Interface: Start, TryUnlock, EmergencyUnlock, EndNaturally, Pomodoro
+│   └── FocusSessionManager.cs         # Singleton state machine: timer, password, pomodoro, thread-safe
 └── ServiceCollectionExtensions.cs      # AddFocusGuardCore() extension method
 
 src/FocusGuard.App/
@@ -133,7 +164,7 @@ src/FocusGuard.App/
 │   ├── NavigationService.cs
 │   ├── IDialogService.cs               # ConfirmAsync, OpenFileAsync, SaveFileAsync
 │   ├── DialogService.cs
-│   └── BlockingOrchestrator.cs         # ActivateProfileAsync(Guid), DeactivateAsync()
+│   └── BlockingOrchestrator.cs         # Session-driven blocking: subscribes to IFocusSessionManager.StateChanged, auto-activates on Working, auto-deactivates on Idle
 ├── ViewModels/
 │   ├── ViewModelBase.cs                # Abstract, inherits ObservableObject, virtual OnNavigatedTo()
 │   ├── MainWindowViewModel.cs          # CurrentView, nav commands
@@ -158,10 +189,12 @@ tests/FocusGuard.Core.Tests/
 ├── Blocking/
 │   ├── DomainHelperTests.cs             # Normalize, Expand, IsValid
 │   └── ProcessHelperTests.cs            # NormalizeProcessName, GetRunningProcessNames
-└── Security/
-    ├── PasswordGeneratorTests.cs        # Length, char sets, group guarantees, uniqueness, edge cases
-    ├── PasswordValidatorTests.cs        # Exact match, case sensitivity, nulls, whitespace
-    └── MasterKeyServiceTests.cs         # Generate/validate, hash storage, case-insensitive hex, setup check
+├── Security/
+│   ├── PasswordGeneratorTests.cs        # Length, char sets, group guarantees, uniqueness, edge cases
+│   ├── PasswordValidatorTests.cs        # Exact match, case sensitivity, nulls, whitespace
+│   └── MasterKeyServiceTests.cs         # Generate/validate, hash storage, case-insensitive hex, setup check
+└── Sessions/
+    └── FocusSessionManagerTests.cs      # State transitions, unlock, emergency unlock, pomodoro, persistence, events
 ```
 
 ## Development Phases
@@ -176,7 +209,7 @@ tests/FocusGuard.Core.Tests/
 
 Phase implementation plans: `docs/validated-sprouting-anchor.md` (Phase 1), `docs/focus-session-timer.md` (Phase 2).
 
-Phase 2 progress: Steps 1–2 done (DB schema evolution + Security Layer), Steps 3–12 pending.
+Phase 2 progress: Steps 1–4 done (DB schema evolution + Security Layer + Focus Session State Machine + BlockingOrchestrator Integration), Steps 5–12 pending.
 
 ## Conventions
 
