@@ -114,6 +114,22 @@ FocusGuard.sln
 - Portable mode: DB, logs, heartbeat go to `{appDir}/data/` instead of `%APPDATA%\FocusGuard\`
 - Auto-start is a no-op in portable mode
 
+### Session Interaction UI
+- **Start Session Dialog** — modal (440x480, borderless dark) shown on profile card click. Duration presets (25/45/60/90/120m) + custom TextBox, Pomodoro toggle, password difficulty ComboBox. `StartSessionDialogViewModel` + `StartSessionDialogResult`
+- **Unlock Dialog** — modal (520x560, borderless dark) for ending sessions early. Password display (hidden by default, reveal button), paste-disabled TextBox (`DataObject.AddPastingHandler` + `PreviewKeyDown`), character counter, error message. Emergency unlock via master key in an Expander. `UnlockDialogViewModel` + `UnlockDialogResult`
+- **Master Key Setup Dialog** — shown on first launch before MainWindow. Consolas-font key display, copy button with "Copied!" state, "I have saved this key" checkbox gate. `MasterKeySetupViewModel`
+- **Dashboard Integration** — "Start Focus Session" buttons on profile cards (disabled when session active), "End Session Early" DangerButton. Real-time status updates via `StateChanged` event marshalled to UI thread via `Dispatcher.InvokeAsync`
+
+### Pomodoro Timer Visualization
+- `PomodoroTimer` — Singleton, wraps 1-second `System.Timers.Timer`. Subscribes to `IFocusSessionManager.StateChanged` and `PomodoroIntervalChanged`. Fires `TimerTick` (UI refresh), `IntervalStarted`, `IntervalCompleted` events. Loads config from `ISettingsRepository`. Calls `AdvancePomodoroInterval()` on interval completion
+- `PomodoroConfiguration` — WorkMinutes(25), ShortBreakMinutes(5), LongBreakMinutes(15), LongBreakInterval(4), AutoStartNext
+- `PomodoroInterval` — Type (FocusSessionState), DurationMinutes, SequenceNumber
+- `PomodoroIntervalCalculator` — Pure logic: `CalculateIntervals(config, totalMinutes)` generates full interval sequence, `GetNextInterval(config, currentState, completedCount)` returns next interval
+- `CircularProgressRing` — Custom WPF `FrameworkElement` in `App/Controls/`. DependencyProperties: Progress(0–1), StrokeThickness, ProgressColor, TrackColor. `OnRender` draws track circle + arc via `StreamGeometry`
+- `SoundAlertService` — System sounds via `System.Media.SystemSounds` (Exclamation=work, Asterisk=break, Hand=session end). Checks `SettingsKeys.SoundEnabled`. Wrapped in try-catch for headless
+- **Dashboard Timer Card** — Visible when session active: CircularProgressRing (140x140) with centered countdown (28px Consolas), interval label, Pomodoro dot indicators (filled via `IndexLessThanConverter`), session remaining text
+- **Converters** — `IntToRangeConverter` (int → `[0..N-1]` for ItemsControl), `IndexLessThanConverter` (MultiValueConverter: index < threshold → filled dot), `InverseBoolToVisibilityConverter`, `StringToVisibilityConverter`
+
 ### UI Theme
 - Dark theme defined in `Resources/Theme.xaml`
 - Key colors: Background `#1E1E2E`, Surface `#2A2A3E`, Primary `#4A90D9`, Text `#ECEFF4`
@@ -129,11 +145,12 @@ FocusGuard.sln
 | `FocusGuard.Core.Blocking` | Website & application blocking engines |
 | `FocusGuard.Core.Configuration` | AppPaths (data dir, DB path, log dir) |
 | `FocusGuard.Core.Security` | PasswordGenerator, PasswordValidator, MasterKeyService, SettingsKeys |
-| `FocusGuard.Core.Sessions` | FocusSessionManager, FocusSessionState, FocusSessionInfo |
+| `FocusGuard.Core.Sessions` | FocusSessionManager, FocusSessionState, FocusSessionInfo, PomodoroTimer, PomodoroIntervalCalculator, SoundAlertService |
 | `FocusGuard.App.ViewModels` | All ViewModels |
 | `FocusGuard.App.Views` | All XAML Views |
 | `FocusGuard.App.Services` | NavigationService, DialogService, BlockingOrchestrator |
-| `FocusGuard.App.Models` | UI display models (ProfileSummary, ProfileListItem) |
+| `FocusGuard.App.Models` | UI display models (ProfileSummary, ProfileListItem, StartSessionDialogResult, UnlockDialogResult) |
+| `FocusGuard.App.Controls` | Custom WPF controls (CircularProgressRing) |
 | `FocusGuard.Core.Hardening` | Strict mode, heartbeat, watchdog launcher, auto-start |
 | `FocusGuard.Core.Recovery` | Crash recovery, session recovery |
 | `FocusGuard.App.Converters` | WPF value converters |
@@ -192,7 +209,12 @@ src/FocusGuard.Core/
 │   ├── FocusSessionState.cs           # Enum: Idle, Working, ShortBreak, LongBreak, Ended
 │   ├── FocusSessionInfo.cs            # Immutable snapshot record for current session
 │   ├── IFocusSessionManager.cs        # Interface: Start, TryUnlock, EmergencyUnlock, EndNaturally, Pomodoro
-│   └── FocusSessionManager.cs         # Singleton state machine: timer, password, pomodoro, thread-safe
+│   ├── FocusSessionManager.cs         # Singleton state machine: timer, password, pomodoro, thread-safe
+│   ├── PomodoroConfiguration.cs       # Config model: work/break durations, long break interval, auto-start
+│   ├── PomodoroInterval.cs            # Interval model: Type (FocusSessionState), DurationMinutes, SequenceNumber
+│   ├── PomodoroIntervalCalculator.cs  # Pure logic: CalculateIntervals, GetNextInterval
+│   ├── PomodoroTimer.cs               # 1-second tick timer: drives UI refresh, manages interval transitions
+│   └── SoundAlertService.cs           # System sounds on interval/session transitions (SystemSounds)
 └── ServiceCollectionExtensions.cs      # AddFocusGuardCore() extension method
 
 src/FocusGuard.App/
@@ -200,29 +222,43 @@ src/FocusGuard.App/
 ├── app.manifest                        # requireAdministrator
 ├── Resources/
 │   └── Theme.xaml                      # Dark theme colors, button/text/card styles
+├── Controls/
+│   └── CircularProgressRing.cs         # Custom FrameworkElement: progress arc via StreamGeometry
 ├── Services/
 │   ├── INavigationService.cs           # NavigateTo<T>(), CurrentView, CurrentViewChanged event
 │   ├── NavigationService.cs
-│   ├── IDialogService.cs               # ConfirmAsync, OpenFileAsync, SaveFileAsync
-│   ├── DialogService.cs
+│   ├── IDialogService.cs               # ConfirmAsync, OpenFileAsync, SaveFileAsync, ShowStartSessionDialogAsync, ShowUnlockDialogAsync
+│   ├── DialogService.cs                # IFocusSessionManager dependency for unlock dialog
 │   └── BlockingOrchestrator.cs         # Session-driven blocking: subscribes to IFocusSessionManager.StateChanged, auto-activates on Working, auto-deactivates on Idle
 ├── ViewModels/
 │   ├── ViewModelBase.cs                # Abstract, inherits ObservableObject, virtual OnNavigatedTo()
 │   ├── MainWindowViewModel.cs          # CurrentView, nav commands
-│   ├── DashboardViewModel.cs           # StatusText, IsBlocking, Profiles collection
+│   ├── DashboardViewModel.cs           # Session status, timer display, Pomodoro progress, profile cards
 │   ├── ProfilesViewModel.cs            # Profile list CRUD, import/export
-│   └── ProfileEditorViewModel.cs       # Edit profile: name, color, websites, apps, save/discard
+│   ├── ProfileEditorViewModel.cs       # Edit profile: name, color, websites, apps, save/discard
+│   ├── StartSessionDialogViewModel.cs  # Duration presets, Pomodoro toggle, difficulty selector
+│   ├── UnlockDialogViewModel.cs        # Password validation, emergency master key unlock
+│   └── MasterKeySetupViewModel.cs      # First-launch master key display and copy
 ├── Views/
 │   ├── MainWindow.xaml / .xaml.cs      # Two-column: sidebar (220px) + content area
-│   ├── DashboardView.xaml / .xaml.cs   # Status card + profile cards + coming-soon placeholders
-│   └── ProfilesView.xaml / .xaml.cs    # Master-detail: profile list + editor
+│   ├── DashboardView.xaml / .xaml.cs   # Timer card with CircularProgressRing + profile cards
+│   ├── ProfilesView.xaml / .xaml.cs    # Master-detail: profile list + editor
+│   ├── StartSessionDialog.xaml / .cs   # Borderless dark modal: duration, Pomodoro, difficulty
+│   ├── UnlockDialog.xaml / .cs         # Borderless dark modal: password entry, emergency unlock
+│   └── MasterKeySetupDialog.xaml / .cs # First-launch master key dialog
 ├── Models/
 │   ├── ProfileSummary.cs               # Id, Name, Color, WebsiteCount, AppCount, IsPreset
-│   └── ProfileListItem.cs              # Same shape as ProfileSummary
+│   ├── ProfileListItem.cs              # Same shape as ProfileSummary
+│   ├── StartSessionDialogResult.cs     # DurationMinutes, EnablePomodoro, Difficulty
+│   └── UnlockDialogResult.cs           # Unlocked, EmergencyUsed
 └── Converters/
     ├── HexToColorConverter.cs          # Hex string → SolidColorBrush
     ├── BoolToVisibilityConverter.cs    # bool → Visibility
-    └── InverseBoolConverter.cs         # bool → !bool
+    ├── InverseBoolConverter.cs         # bool → !bool
+    ├── InverseBoolToVisibilityConverter.cs  # true → Collapsed, false → Visible
+    ├── StringToVisibilityConverter.cs  # non-empty string → Visible
+    ├── IntToRangeConverter.cs          # int N → [0..N-1] list for ItemsControl
+    └── IndexLessThanConverter.cs       # MultiValueConverter: index < threshold → true (Pomodoro dots)
 
 src/FocusGuard.Watchdog/
 ├── FocusGuard.Watchdog.csproj          # net8.0-windows WinExe, no Core dependency
@@ -250,7 +286,8 @@ tests/FocusGuard.Core.Tests/
 │   ├── CrashRecoveryServiceTests.cs     # Orphaned session cleanup (Working/ShortBreak/LongBreak), hosts cleanup
 │   └── SessionRecoveryServiceTests.cs   # No active → false, expired → ended, active → resumes
 └── Sessions/
-    └── FocusSessionManagerTests.cs      # State transitions, unlock, emergency unlock, pomodoro, persistence, events, ResumeSessionAsync
+    ├── FocusSessionManagerTests.cs      # State transitions, unlock, emergency unlock, pomodoro, persistence, events, ResumeSessionAsync
+    └── PomodoroIntervalCalculatorTests.cs # Interval sequence, long break placement, duration fitting, custom config
 ```
 
 ## Development Phases
@@ -263,7 +300,18 @@ tests/FocusGuard.Core.Tests/
 | 4 — Statistics & Polish | Done | Charts, goals, streaks, notifications, auto-start |
 | 5 — Hardening | Done | Global exception handling, crash recovery, strict mode, watchdog, auto-start, portable mode, Inno Setup installer |
 
-Phase implementation plans: `docs/validated-sprouting-anchor.md` (Phase 1), `docs/focus-session-timer.md` (Phase 2).
+### UI Feature Areas (post-Phase 5)
+
+| Feature Area | Status | Description |
+|--------------|--------|-------------|
+| 1 — Session Interaction UI | Done | Start session dialog, unlock dialog, master key setup, dashboard integration |
+| 2 — Pomodoro Timer Visualization | Done | CircularProgressRing, 1s tick timer, interval indicators, sound alerts |
+| 3 — Calendar & Scheduling | Planned | Calendar view, drag-and-drop, recurring sessions, auto-activation |
+| 4 — Statistics & Analytics | Planned | Charts, goals, streaks, session history |
+| 5 — System Tray & Notifications | Planned | Tray icon, toast notifications, floating overlay |
+| 6 — Settings View | Planned | Settings page for all configurable options |
+
+Phase implementation plans: `docs/validated-sprouting-anchor.md` (Phase 1), `docs/focus-session-timer.md` (Phase 2). UI feature plan: `docs/remaining-features.md`.
 
 ## Conventions
 

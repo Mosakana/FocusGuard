@@ -1,6 +1,7 @@
 <UserControl x:Class="FocusGuard.App.Views.DashboardView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:FocusGuard.App.Controls"
              xmlns:converters="clr-namespace:FocusGuard.App.Converters">
     <UserControl.Resources>
         <converters:HexToColorConverter x:Key="HexToColorConverter" />
@@ -11,13 +12,124 @@
             <!-- Heading -->
             <TextBlock Text="Dashboard" Style="{StaticResource HeadingStyle}" />
 
-            <!-- Status Card -->
-            <Border Style="{StaticResource CardStyle}">
+            <!-- Status Card (when no active session) -->
+            <Border Style="{StaticResource CardStyle}"
+                    Visibility="{Binding IsSessionActive, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                 <StackPanel>
                     <TextBlock Text="Current Status" Style="{StaticResource SubheadingStyle}" />
                     <TextBlock Text="{Binding StatusText}" Style="{StaticResource BodyTextStyle}"
                                FontSize="15" Margin="0,8,0,0" />
                 </StackPanel>
+            </Border>
+
+            <!-- Active Session Timer Card (when session is active) -->
+            <Border Style="{StaticResource CardStyle}"
+                    Visibility="{Binding IsSessionActive, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Circular Progress Ring -->
+                    <Grid Grid.Column="0" Width="140" Height="140" Margin="0,0,24,0">
+                        <controls:CircularProgressRing
+                            Progress="{Binding TimerProgress}"
+                            StrokeThickness="6"
+                            ProgressColor="{StaticResource PrimaryBrush}"
+                            TrackColor="{StaticResource SurfaceLightBrush}" />
+                        <!-- Timer Display centered inside the ring -->
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding TimerDisplay}"
+                                       FontFamily="Consolas" FontSize="28" FontWeight="Bold"
+                                       Foreground="{StaticResource TextBrush}"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock Text="{Binding CurrentIntervalLabel}"
+                                       FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center" Margin="0,2,0,0"
+                                       Visibility="{Binding IsPomodoroSession, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Session Info -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ActiveProfileName}"
+                                   FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}" />
+                        <TextBlock Text="{Binding StatusText}"
+                                   FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,4,0,0" />
+
+                        <!-- Pomodoro Dot Indicators -->
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0"
+                                    Visibility="{Binding IsPomodoroSession, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <ItemsControl>
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemsSource>
+                                    <Binding Path="PomodoroTotalIntervals">
+                                        <Binding.Converter>
+                                            <converters:IntToRangeConverter />
+                                        </Binding.Converter>
+                                    </Binding>
+                                </ItemsControl.ItemsSource>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Ellipse Width="10" Height="10" Margin="0,0,6,0"
+                                                 StrokeThickness="0">
+                                            <Ellipse.Style>
+                                                <Style TargetType="Ellipse">
+                                                    <Setter Property="Fill" Value="{StaticResource SurfaceLightBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Value="True">
+                                                            <DataTrigger.Binding>
+                                                                <MultiBinding>
+                                                                    <MultiBinding.Converter>
+                                                                        <converters:IndexLessThanConverter />
+                                                                    </MultiBinding.Converter>
+                                                                    <Binding />
+                                                                    <Binding Path="DataContext.PomodoroCompletedCount"
+                                                                             RelativeSource="{RelativeSource AncestorType=UserControl}" />
+                                                                </MultiBinding>
+                                                            </DataTrigger.Binding>
+                                                            <Setter Property="Fill" Value="{StaticResource PrimaryBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Ellipse.Style>
+                                        </Ellipse>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Margin="4,0,0,0" FontSize="11"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center">
+                                <Run Text="{Binding PomodoroCompletedCount, Mode=OneWay}" />
+                                <Run Text="/" /><Run Text="{Binding PomodoroTotalIntervals, Mode=OneWay}" />
+                                <Run Text=" completed" />
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- Total Session Remaining (for Pomodoro mode) -->
+                        <TextBlock Margin="0,6,0,0" FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Visibility="{Binding IsPomodoroSession, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Run Text="Session: " />
+                            <Run Text="{Binding SessionTimeRemaining, Mode=OneWay}" />
+                            <Run Text=" remaining" />
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- End Session Button -->
+                    <Button Grid.Column="2" Content="End Session Early"
+                            Style="{StaticResource DangerButtonStyle}"
+                            VerticalAlignment="Center"
+                            Command="{Binding EndSessionEarlyCommand}" />
+                </Grid>
             </Border>
 
             <!-- Profile Quick-Start -->
@@ -47,6 +159,11 @@
                                     <Run Text="{Binding AppCount, Mode=OneWay}" />
                                     <Run Text=" apps" />
                                 </TextBlock>
+                                <Button Content="Start Focus Session" Margin="0,10,0,0"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Command="{Binding DataContext.StartSessionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding Id}"
+                                        IsEnabled="{Binding DataContext.IsSessionActive, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource InverseBoolConverter}}" />
                             </StackPanel>
                         </Border>
                     </DataTemplate>
@@ -72,15 +189,6 @@
                         <TextBlock Text="&#x1F4CA; Statistics" FontSize="14" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextSecondaryBrush}" />
                         <TextBlock Text="Track your productivity" FontSize="12"
-                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0" />
-                    </StackPanel>
-                </Border>
-                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="20" Margin="0,0,12,12"
-                        Width="200" Opacity="0.5">
-                    <StackPanel>
-                        <TextBlock Text="&#x23F1; Pomodoro Timer" FontSize="14" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextSecondaryBrush}" />
-                        <TextBlock Text="Work/break intervals" FontSize="12"
                                    Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0" />
                     </StackPanel>
                 </Border>

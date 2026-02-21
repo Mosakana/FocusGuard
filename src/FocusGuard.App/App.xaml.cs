@@ -136,6 +136,16 @@ public partial class App : Application
             await crashRecovery.RecoverAsync();
         }
 
+        // Master key setup on first launch
+        var masterKeyService = Services.GetRequiredService<FocusGuard.Core.Security.MasterKeyService>();
+        if (!await masterKeyService.IsSetupCompleteAsync())
+        {
+            var setupVm = new ViewModels.MasterKeySetupViewModel(masterKeyService);
+            await setupVm.GenerateKeyAsync();
+            var setupDialog = new Views.MasterKeySetupDialog { DataContext = setupVm };
+            setupDialog.ShowDialog();
+        }
+
         var mainWindow = Services.GetRequiredService<MainWindow>();
 
         if (isMinimized)

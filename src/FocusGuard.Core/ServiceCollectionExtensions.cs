@@ -38,6 +38,9 @@ public static class ServiceCollectionExtensions
 
         // Sessions
         services.AddSingleton<IFocusSessionManager, FocusSessionManager>();
+        services.AddSingleton<PomodoroIntervalCalculator>();
+        services.AddSingleton<PomodoroTimer>();
+        services.AddSingleton<SoundAlertService>();
 
         // Recovery
         services.AddSingleton<ICrashRecoveryService, CrashRecoveryService>();

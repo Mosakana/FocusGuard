@@ -1,10 +1,21 @@
 using System.Windows;
+using FocusGuard.App.Models;
+using FocusGuard.App.ViewModels;
+using FocusGuard.App.Views;
+using FocusGuard.Core.Sessions;
 using Microsoft.Win32;
 
 namespace FocusGuard.App.Services;
 
 public class DialogService : IDialogService
 {
+    private readonly IFocusSessionManager _sessionManager;
+
+    public DialogService(IFocusSessionManager sessionManager)
+    {
+        _sessionManager = sessionManager;
+    }
+
     public Task<bool> ConfirmAsync(string title, string message)
     {
         var result = MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question);
@@ -30,5 +41,57 @@ public class DialogService : IDialogService
             FileName = defaultFileName
         };
         return Task.FromResult(dialog.ShowDialog() == true ? dialog.FileName : null);
+    }
+
+    public Task<StartSessionDialogResult?> ShowStartSessionDialogAsync(
+        Guid profileId, string profileName, string profileColor)
+    {
+        var vm = new StartSessionDialogViewModel
+        {
+            ProfileId = profileId,
+            ProfileName = profileName,
+            ProfileColor = profileColor
+        };
+
+        var dialog = new StartSessionDialog
+        {
+            DataContext = vm,
+            Owner = Application.Current.MainWindow
+        };
+
+        var ok = dialog.ShowDialog() == true;
+        if (!ok || !vm.Confirmed)
+            return Task.FromResult<StartSessionDialogResult?>(null);
+
+        return Task.FromResult<StartSessionDialogResult?>(new StartSessionDialogResult
+        {
+            DurationMinutes = vm.DurationMinutes,
+            EnablePomodoro = vm.EnablePomodoro,
+            Difficulty = vm.SelectedDifficulty
+        });
+    }
+
+    public Task<UnlockDialogResult?> ShowUnlockDialogAsync(string generatedPassword)
+    {
+        var vm = new UnlockDialogViewModel(_sessionManager)
+        {
+            GeneratedPassword = generatedPassword
+        };
+
+        var dialog = new UnlockDialog
+        {
+            DataContext = vm,
+            Owner = Application.Current.MainWindow
+        };
+
+        var ok = dialog.ShowDialog() == true;
+        if (!ok || !vm.UnlockSucceeded)
+            return Task.FromResult<UnlockDialogResult?>(null);
+
+        return Task.FromResult<UnlockDialogResult?>(new UnlockDialogResult
+        {
+            Unlocked = vm.UnlockSucceeded,
+            EmergencyUsed = vm.EmergencyUnlockUsed
+        });
     }
 }

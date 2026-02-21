@@ -1,0 +1,98 @@
+<Window x:Class="FocusGuard.App.Views.UnlockDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Unlock Focus Session" Width="520" Height="560"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent">
+    <Border Background="{StaticResource BackgroundBrush}" CornerRadius="12"
+            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+        <Grid Margin="24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                <TextBlock Text="End Session Early" Style="{StaticResource HeadingStyle}" Margin="0" />
+                <TextBlock Text="Type the unlock password exactly to end your focus session."
+                           Foreground="{StaticResource TextSecondaryBrush}" FontSize="13" Margin="0,4,0,0" />
+            </StackPanel>
+
+            <!-- Content -->
+            <StackPanel Grid.Row="1">
+                <!-- Password Display -->
+                <TextBlock Text="Unlock Password" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,8" />
+
+                <Border Background="{StaticResource SurfaceLightBrush}" CornerRadius="6"
+                        Padding="12" Margin="0,0,0,8">
+                    <Grid>
+                        <TextBlock Text="{Binding GeneratedPassword}" FontFamily="Consolas" FontSize="15"
+                                   Foreground="{StaticResource TextBrush}" TextWrapping="Wrap"
+                                   Visibility="{Binding IsPasswordRevealed, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        <StackPanel Orientation="Horizontal"
+                                    Visibility="{Binding IsPasswordRevealed, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                            <TextBlock Text="Password hidden" Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="13" FontStyle="Italic" VerticalAlignment="Center" />
+                            <Button Content="Reveal" Style="{StaticResource SecondaryButtonStyle}"
+                                    Margin="12,0,0,0" Padding="12,4"
+                                    Command="{Binding RevealPasswordCommand}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Type Password -->
+                <TextBlock Text="Type the password below" Style="{StaticResource SubheadingStyle}" Margin="0,8,0,8" />
+
+                <TextBox x:Name="PasswordInput" Style="{StaticResource DarkTextBoxStyle}"
+                         Text="{Binding TypedPassword, UpdateSourceTrigger=PropertyChanged}"
+                         FontFamily="Consolas" FontSize="15" TextWrapping="Wrap"
+                         AcceptsReturn="False" MaxLines="3" Height="70"
+                         VerticalContentAlignment="Top" />
+
+                <!-- Character Counter -->
+                <TextBlock Margin="0,6,0,0" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}">
+                    <Run Text="{Binding TypedLength, Mode=OneWay}" />
+                    <Run Text=" / " />
+                    <Run Text="{Binding PasswordLength, Mode=OneWay}" />
+                    <Run Text=" characters" />
+                </TextBlock>
+
+                <!-- Error Message -->
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource DangerBrush}"
+                           FontSize="12" Margin="0,6,0,0"
+                           Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}" />
+
+                <!-- Emergency Unlock Section -->
+                <Expander Margin="0,16,0,0" IsExpanded="{Binding IsEmergencyExpanded}">
+                    <Expander.Header>
+                        <TextBlock Text="Emergency Unlock (Master Key)" Foreground="{StaticResource WarningBrush}"
+                                   FontSize="13" />
+                    </Expander.Header>
+                    <StackPanel Margin="0,8,0,0">
+                        <TextBlock Text="Enter your master recovery key:"
+                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" Margin="0,0,0,6" />
+                        <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                 Text="{Binding MasterKeyInput, UpdateSourceTrigger=PropertyChanged}"
+                                 FontFamily="Consolas" FontSize="13" />
+                        <Button Content="Emergency Unlock" Style="{StaticResource DangerButtonStyle}"
+                                Margin="0,8,0,0" HorizontalAlignment="Left"
+                                Command="{Binding TryEmergencyUnlockCommand}"
+                                CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}" />
+                    </StackPanel>
+                </Expander>
+            </StackPanel>
+
+            <!-- Buttons -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                <Button Content="Cancel" Style="{StaticResource SecondaryButtonStyle}"
+                        Margin="0,0,8,0" Width="90" Click="CancelButton_Click" />
+                <Button Content="Unlock" Style="{StaticResource PrimaryButtonStyle}"
+                        Width="100" IsEnabled="{Binding IsCorrect}"
+                        Command="{Binding TryUnlockCommand}"
+                        CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

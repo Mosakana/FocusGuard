@@ -13,9 +13,17 @@ A Windows desktop application that helps you stay focused by blocking distractin
 - **Master Recovery Key** — SHA-256 hashed emergency key generated on first launch for genuine emergencies
 - **Focus Session State Machine** — Full session lifecycle (Idle → Working → Ended) with timer-based natural expiration, password unlock, and emergency master key unlock
 - **Pomodoro Mode** — Optional Pomodoro cycling (Working → ShortBreak → Working → ... → LongBreak) with configurable intervals
+- **Pomodoro Timer Visualization** — Circular progress ring with large countdown display, interval labels (Focus Time / Short Break / Long Break), dot indicators showing completed intervals, and system sound alerts on transitions
 - **Automatic Blocking** — Blocking engines activate automatically when a focus session starts and deactivate when it ends; blocking stays active during Pomodoro breaks
+- **Start Session Dialog** — Duration presets (25/45/60/90/120 min), Pomodoro toggle, password difficulty selector
+- **Unlock Dialog** — Hidden password with reveal, paste-disabled input, emergency master key unlock
+- **Master Key Setup** — First-launch setup with copyable recovery key
+- **Crash Recovery** — Global exception handlers, orphaned session cleanup, watchdog process restart
+- **Strict Mode** — Prevents app closure during active sessions, watchdog heartbeat monitoring
+- **Auto-Start** — Optional Windows startup via registry, with `--minimized` flag
+- **Portable Mode** — Drop a `portable.marker` file next to the exe to store all data locally
 
-> **Planned:** Timer UI, system tray integration, floating timer overlay, calendar scheduling, statistics dashboard.
+> **Planned:** Calendar scheduling, statistics dashboard, system tray integration, floating timer overlay, settings page.
 
 ## Requirements
 
@@ -59,21 +67,28 @@ FocusGuard/
 │   │   ├── Blocking/               # Website & application blocking engines
 │   │   ├── Configuration/          # Application paths and settings
 │   │   ├── Data/                   # Database context, entities, repositories, migrator
+│   │   ├── Hardening/              # Strict mode, heartbeat, watchdog, auto-start
+│   │   ├── Recovery/               # Crash recovery, session recovery
 │   │   ├── Security/               # Password generation, validation, master key service
-│   │   └── Sessions/               # Focus session state machine, manager, state types
+│   │   └── Sessions/               # Focus session state machine, Pomodoro timer, sound alerts
+│   ├── FocusGuard.Watchdog/        # Standalone watchdog process (heartbeat monitoring)
 │   └── FocusGuard.App/             # WPF desktop application
-│       ├── Converters/             # WPF value converters (hex→color, bool→visibility)
-│       ├── Models/                 # UI display models
+│       ├── Controls/               # Custom WPF controls (CircularProgressRing)
+│       ├── Converters/             # WPF value converters (hex→color, bool→visibility, etc.)
+│       ├── Models/                 # UI display models and dialog results
 │       ├── Resources/              # Theme and style definitions
 │       ├── Services/               # Navigation, dialogs, blocking orchestration
-│       ├── ViewModels/             # MVVM ViewModels
-│       └── Views/                  # XAML views (MainWindow, Dashboard, Profiles)
+│       ├── ViewModels/             # MVVM ViewModels (incl. dialog ViewModels)
+│       └── Views/                  # XAML views and modal dialogs
+├── installer/                      # Inno Setup installer script and build script
 └── tests/
-    └── FocusGuard.Core.Tests/      # Unit tests for core logic
+    └── FocusGuard.Core.Tests/      # Unit tests for core logic (161 tests)
         ├── Blocking/               # Domain helper and process helper tests
         ├── Data/                   # Repository tests
+        ├── Hardening/              # Strict mode, heartbeat tests
+        ├── Recovery/               # Crash recovery, session recovery tests
         ├── Security/               # Password generator, validator, master key tests
-        └── Sessions/               # Focus session manager state machine tests
+        └── Sessions/               # Session manager, Pomodoro interval calculator tests
 ```
 
 ### `docs/`
@@ -88,22 +103,23 @@ Platform-independent core logic with no WPF dependency. Contains:
 - **Configuration/** — `AppPaths` defines file paths (`%APPDATA%\FocusGuard\` for database and logs).
 - **Data/** — SQLite database layer using Entity Framework Core. `ProfileEntity` stores blacklist profiles, `FocusSessionEntity` tracks session history, `SettingEntity` provides key-value settings. `DatabaseMigrator` handles schema evolution for Phase 2+ tables via `CREATE TABLE IF NOT EXISTS`. Repository pattern with `IDbContextFactory` for thread-safe database access.
 - **Security/** — `PasswordGenerator` creates cryptographically random passwords using `RandomNumberGenerator` with three difficulty levels (Easy: lowercase, Medium: mixed case + digits, Hard: + specials). `PasswordValidator` performs exact ordinal comparison. `MasterKeyService` manages master recovery key lifecycle (generate, hash with SHA-256 + salt, validate). `SettingsKeys` defines constants for all application settings.
-- **Sessions/** — `FocusSessionManager` implements the core session state machine (Idle → Working → ShortBreak/LongBreak → Ended). Manages session timer (`System.Timers.Timer`), generates unlock passwords on session start, validates password and master key unlock attempts, supports Pomodoro interval cycling with configurable work/break durations. Thread-safe via `SemaphoreSlim`. Fires `StateChanged`, `SessionEnded`, and `PomodoroIntervalChanged` events. `FocusSessionInfo` provides immutable session snapshots. `FocusSessionState` enum defines all valid states.
+- **Sessions/** — `FocusSessionManager` implements the core session state machine (Idle → Working → ShortBreak/LongBreak → Ended). Manages session timer (`System.Timers.Timer`), generates unlock passwords on session start, validates password and master key unlock attempts, supports Pomodoro interval cycling with configurable work/break durations. Thread-safe via `SemaphoreSlim`. Fires `StateChanged`, `SessionEnded`, and `PomodoroIntervalChanged` events. `PomodoroTimer` provides 1-second tick events for UI countdown refresh and auto-advances intervals. `PomodoroIntervalCalculator` computes interval sequences. `SoundAlertService` plays system sounds on state transitions. `FocusSessionInfo` provides immutable session snapshots.
 
 ### `src/FocusGuard.App/`
 
 WPF desktop application using MVVM pattern:
 
-- **Views/** — XAML UI: main window with sidebar navigation, dashboard with profile cards, profiles editor with website/app list management.
-- **ViewModels/** — Application logic: dashboard status display, profile CRUD operations, editor with save/discard tracking.
-- **Services/** — `NavigationService` (ViewModel-first page switching), `DialogService` (confirmation and file dialogs), `BlockingOrchestrator` (bridges focus sessions to blocking engines — automatically activates blocking when a session starts and deactivates when it ends, keeps blocking active during Pomodoro breaks).
+- **Views/** — XAML UI: main window with sidebar navigation, dashboard with timer visualization and profile cards, profiles editor, start session dialog, unlock dialog, master key setup dialog.
+- **ViewModels/** — Application logic: dashboard with real-time timer display and Pomodoro progress, profile CRUD operations, dialog ViewModels for session start/unlock/master key flows.
+- **Controls/** — Custom WPF controls: `CircularProgressRing` renders a progress arc via `StreamGeometry`.
+- **Services/** — `NavigationService` (ViewModel-first page switching), `DialogService` (confirmation, file, and session dialogs), `BlockingOrchestrator` (bridges focus sessions to blocking engines — automatically activates blocking when a session starts and deactivates when it ends, keeps blocking active during Pomodoro breaks).
 - **Resources/** — Dark theme definition with color palette, button styles, and typography.
-- **Converters/** — Hex color string to brush, boolean to visibility, inverse boolean.
-- **Models/** — Lightweight display models for UI data binding.
+- **Converters/** — Hex color to brush, boolean to visibility, inverse boolean, string to visibility, int-to-range for Pomodoro dots, index-less-than for filled/unfilled indicators.
+- **Models/** — Lightweight display models and dialog result types.
 
 ### `tests/FocusGuard.Core.Tests/`
 
-xUnit tests using EF Core InMemory provider and Moq. Covers profile repository CRUD operations, domain validation/normalization, process name handling, password generation (length, character sets, group guarantees, uniqueness), password validation (exact match, case sensitivity), master key service (generate, validate, hash storage), and focus session manager (state transitions, password unlock, emergency unlock, Pomodoro cycling, persistence, events).
+161 xUnit tests using EF Core InMemory provider and Moq. Covers profile repository CRUD, domain validation/normalization, process name handling, password generation/validation, master key service, focus session manager (state transitions, unlock, Pomodoro cycling, events), Pomodoro interval calculator (interval sequences, long break placement, custom config), strict mode service, heartbeat helpers, crash recovery, and session recovery.
 
 ## Dependencies
 
@@ -118,6 +134,7 @@ xUnit tests using EF Core InMemory provider and Moq. Covers profile repository C
 | Serilog.Extensions.Logging | 8.0.x | Microsoft.Extensions.Logging integration |
 | Serilog.Sinks.File | 6.0.x | Rolling file log output |
 | System.Management | 8.0.x | WMI for real-time process monitoring |
+| System.Windows.Extensions | 8.0.x | System sounds (SystemSounds) for alerts |
 
 ### FocusGuard.App
 
