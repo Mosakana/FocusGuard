@@ -1,0 +1,296 @@
+<UserControl x:Class="FocusGuard.App.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+            <!-- Heading -->
+            <TextBlock Text="Settings" Style="{StaticResource HeadingStyle}" />
+
+            <!-- General Card -->
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Text="General" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,12" />
+
+                    <!-- Auto-start -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Auto-start on boot" Foreground="{StaticResource TextBrush}" FontSize="13" />
+                            <TextBlock Text="Launch FocusGuard when Windows starts" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" IsChecked="{Binding AutoStartEnabled}" VerticalAlignment="Center"
+                                  IsEnabled="{Binding IsPortableMode, Converter={StaticResource InverseBoolConverter}}">
+                            <CheckBox.Style>
+                                <Style TargetType="CheckBox">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsPortableMode}" Value="True">
+                                            <Setter Property="ToolTip" Value="Auto-start is not available in portable mode" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </CheckBox.Style>
+                        </CheckBox>
+                    </Grid>
+
+                    <!-- Minimize to tray -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Minimize to tray" Foreground="{StaticResource TextBrush}" FontSize="13" />
+                            <TextBlock Text="Hide to system tray instead of closing" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" IsChecked="{Binding MinimizeToTray}" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- Strict mode -->
+                    <Grid Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Strict mode" Foreground="{StaticResource TextBrush}" FontSize="13" />
+                            <TextBlock Text="Prevent closing FocusGuard during active sessions" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" IsChecked="{Binding StrictModeEnabled}" VerticalAlignment="Center"
+                                  IsEnabled="{Binding CanToggleStrictMode}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Session Defaults Card -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,8,0,0">
+                <StackPanel>
+                    <TextBlock Text="Session Defaults" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,12" />
+
+                    <!-- Default duration -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="80" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Default duration" Foreground="{StaticResource TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="1" Text="{Binding DefaultDurationMinutes, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource DarkTextBoxStyle}" HorizontalContentAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="minutes" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"
+                                   VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </Grid>
+
+                    <!-- Password difficulty -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="120" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Password difficulty" Foreground="{StaticResource TextBrush}" FontSize="13" />
+                            <TextBlock Text="Complexity of the generated unlock password" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding PasswordDifficultyOptions}"
+                                  SelectedItem="{Binding PasswordDifficulty}"
+                                  Background="{StaticResource SurfaceLightBrush}"
+                                  Foreground="{StaticResource TextBrush}"
+                                  FontSize="13" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- Password length -->
+                    <Grid Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="80" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Password length" Foreground="{StaticResource TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="1" Text="{Binding PasswordLength, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource DarkTextBoxStyle}" HorizontalContentAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="characters" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"
+                                   VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Pomodoro Card -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,8,0,0">
+                <StackPanel>
+                    <TextBlock Text="Pomodoro" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,12" />
+
+                    <!-- Work duration -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="80" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Work duration" Foreground="{StaticResource TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="1" Text="{Binding PomodoroWorkMinutes, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource DarkTextBoxStyle}" HorizontalContentAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="minutes" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"
+                                   VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </Grid>
+
+                    <!-- Short break -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="80" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Short break" Foreground="{StaticResource TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="1" Text="{Binding PomodoroShortBreakMinutes, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource DarkTextBoxStyle}" HorizontalContentAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="minutes" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"
+                                   VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </Grid>
+
+                    <!-- Long break -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="80" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Long break" Foreground="{StaticResource TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="1" Text="{Binding PomodoroLongBreakMinutes, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource DarkTextBoxStyle}" HorizontalContentAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="minutes" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"
+                                   VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </Grid>
+
+                    <!-- Long break interval -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="80" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Long break after" Foreground="{StaticResource TextBrush}" FontSize="13" />
+                            <TextBlock Text="Number of work intervals before a long break" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <TextBox Grid.Column="1" Text="{Binding PomodoroLongBreakInterval, UpdateSourceTrigger=LostFocus}"
+                                 Style="{StaticResource DarkTextBoxStyle}" HorizontalContentAlignment="Center" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="sessions" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"
+                                   VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </Grid>
+
+                    <!-- Auto-start next -->
+                    <Grid Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Auto-start next interval" Foreground="{StaticResource TextBrush}" FontSize="13" />
+                            <TextBlock Text="Automatically start the next work or break interval" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" IsChecked="{Binding PomodoroAutoStart}" VerticalAlignment="Center" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Notifications Card -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,8,0,0">
+                <StackPanel>
+                    <TextBlock Text="Notifications" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,12" />
+
+                    <!-- Session notifications -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Session notifications" Foreground="{StaticResource TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                        <CheckBox Grid.Column="1" IsChecked="{Binding SessionNotificationsEnabled}" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- Pomodoro notifications -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Pomodoro notifications" Foreground="{StaticResource TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                        <CheckBox Grid.Column="1" IsChecked="{Binding PomodoroNotificationsEnabled}" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- Blocked app alerts -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Blocked app alerts" Foreground="{StaticResource TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                        <CheckBox Grid.Column="1" IsChecked="{Binding BlockedNotificationsEnabled}" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- Goal celebrations -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Goal celebrations" Foreground="{StaticResource TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                        <CheckBox Grid.Column="1" IsChecked="{Binding GoalNotificationsEnabled}" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- Sound effects -->
+                    <Grid Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Sound effects" Foreground="{StaticResource TextBrush}" FontSize="13" />
+                            <TextBlock Text="Play sounds on interval transitions" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <CheckBox Grid.Column="1" IsChecked="{Binding SoundEnabled}" VerticalAlignment="Center" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Security Card -->
+            <Border Style="{StaticResource CardStyle}" Margin="0,8,0,0">
+                <StackPanel>
+                    <TextBlock Text="Security" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,12" />
+
+                    <!-- Master key status -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Master recovery key" Foreground="{StaticResource TextBrush}" FontSize="13" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="13">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="Not configured" />
+                                    <Setter Property="Foreground" Value="#E06C75" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsMasterKeySetup}" Value="True">
+                                            <Setter Property="Text" Value="Configured" />
+                                            <Setter Property="Foreground" Value="#98C379" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+
+                    <!-- Regenerate button -->
+                    <Button Content="Regenerate Master Key" Style="{StaticResource DangerButtonStyle}"
+                            Command="{Binding RegenerateMasterKeyCommand}" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Border>
+
+            <!-- Bottom spacing -->
+            <Border Height="16" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -19,6 +19,12 @@ public static class SettingsKeys
     public const string StrictModeEnabled = "app.strict_mode_enabled";
     public const string AutoStartEnabled = "app.auto_start_enabled";
 
+    // Notification toggles
+    public const string NotifySessionEnabled = "notifications.session_enabled";
+    public const string NotifyPomodoroEnabled = "notifications.pomodoro_enabled";
+    public const string NotifyBlockedEnabled = "notifications.blocked_enabled";
+    public const string NotifyGoalEnabled = "notifications.goal_enabled";
+
     // Phase 4: Goals
     public const string GoalIndex = "goal.index";
     public const string GoalDailyPrefix = "goal.daily";

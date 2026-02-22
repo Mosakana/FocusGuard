@@ -31,4 +31,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private void NavigateToStatistics() => _navigationService.NavigateTo<StatisticsViewModel>();
+
+    [RelayCommand]
+    private void NavigateToSettings() => _navigationService.NavigateTo<SettingsViewModel>();
 }

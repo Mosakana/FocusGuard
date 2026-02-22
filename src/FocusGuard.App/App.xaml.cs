@@ -14,6 +14,7 @@ using FocusGuard.Core.Scheduling;
 using FocusGuard.Core.Sessions;
 using FocusGuard.Core.Statistics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Toolkit.Uwp.Notifications;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
@@ -68,6 +69,9 @@ public partial class App : Application
                 services.AddSingleton<INavigationService, NavigationService>();
                 services.AddSingleton<IDialogService, DialogService>();
                 services.AddSingleton<BlockingOrchestrator>();
+                services.AddSingleton<ITrayIconService, TrayIconService>();
+                services.AddSingleton<IOverlayService, OverlayService>();
+                services.AddSingleton<INotificationService, NotificationService>();
 
                 // ViewModels
                 services.AddTransient<DashboardViewModel>();
@@ -75,6 +79,7 @@ public partial class App : Application
                 services.AddTransient<ProfileEditorViewModel>();
                 services.AddTransient<CalendarViewModel>();
                 services.AddTransient<StatisticsViewModel>();
+                services.AddTransient<SettingsViewModel>();
                 services.AddSingleton<MainWindowViewModel>();
 
                 // Windows
@@ -157,15 +162,24 @@ public partial class App : Application
         // Resolve BlockedAttemptLogger singleton so it subscribes to events
         _ = Services.GetRequiredService<BlockedAttemptLogger>();
 
+        // Initialize system tray, overlay, and notifications
+        Services.GetRequiredService<ITrayIconService>().Initialize();
+        Services.GetRequiredService<IOverlayService>().Initialize();
+        Services.GetRequiredService<INotificationService>().Initialize();
+
         var mainWindow = Services.GetRequiredService<MainWindow>();
 
         if (isMinimized)
         {
             mainWindow.WindowState = WindowState.Minimized;
             mainWindow.ShowInTaskbar = false;
+            mainWindow.Show();
+            mainWindow.Hide();
         }
-
-        mainWindow.Show();
+        else
+        {
+            mainWindow.Show();
+        }
 
         Log.Information("FocusGuard started");
     }
@@ -173,6 +187,19 @@ public partial class App : Application
     protected override async void OnExit(ExitEventArgs e)
     {
         Log.Information("FocusGuard shutting down");
+
+        // Dispose tray/overlay/notifications before emergency cleanup
+        try
+        {
+            (Services?.GetService<INotificationService>() as IDisposable)?.Dispose();
+            (Services?.GetService<IOverlayService>() as IDisposable)?.Dispose();
+            (Services?.GetService<ITrayIconService>() as IDisposable)?.Dispose();
+            ToastNotificationManagerCompat.Uninstall();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error disposing tray/overlay/notification services");
+        }
 
         EmergencyCleanup();
 
@@ -222,6 +249,9 @@ public partial class App : Application
             // Stop heartbeat so watchdog exits cleanly
             var heartbeat = Services?.GetService<IHeartbeatService>();
             heartbeat?.Stop();
+
+            // Dispose tray icon to prevent orphaned icon in system tray
+            (Services?.GetService<ITrayIconService>() as IDisposable)?.Dispose();
         }
         catch (Exception ex)
         {

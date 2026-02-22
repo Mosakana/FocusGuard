@@ -25,8 +25,9 @@ A Windows desktop application that helps you stay focused by blocking distractin
 - **Strict Mode** — Prevents app closure during active sessions, watchdog heartbeat monitoring
 - **Auto-Start** — Optional Windows startup via registry, with `--minimized` flag
 - **Portable Mode** — Drop a `portable.marker` file next to the exe to store all data locally
-
-> **Planned:** Statistics dashboard, system tray integration, floating timer overlay, settings page.
+- **Statistics & Analytics** — Period-based statistics (day/week/month), bar and pie charts (LiveCharts2), 90-day focus heatmap, streak tracking, focus goals with progress bars, CSV export
+- **System Tray & Notifications** — System tray icon with context menu, Windows toast notifications for session and Pomodoro events, floating timer overlay
+- **Settings Page** — Centralized settings for general preferences (auto-start, minimize to tray, strict mode), session defaults (duration, password difficulty/length), Pomodoro configuration (work/break durations, auto-start), notification toggles, and master key regeneration
 
 ## Requirements
 
@@ -86,7 +87,7 @@ FocusGuard/
 │       └── Views/                  # XAML views and modal dialogs
 ├── installer/                      # Inno Setup installer script and build script
 └── tests/
-    └── FocusGuard.Core.Tests/      # Unit tests for core logic (176 tests)
+    └── FocusGuard.Core.Tests/      # Unit tests for core logic (209 tests)
         ├── Blocking/               # Domain helper and process helper tests
         ├── Data/                   # Repository tests
         ├── Hardening/              # Strict mode, heartbeat tests
@@ -115,8 +116,8 @@ Platform-independent core logic with no WPF dependency. Contains:
 
 WPF desktop application using MVVM pattern:
 
-- **Views/** — XAML UI: main window with sidebar navigation, dashboard with timer visualization and profile cards, profiles editor, calendar month grid with day detail panel, schedule session dialog, start session dialog, unlock dialog, master key setup dialog.
-- **ViewModels/** — Application logic: dashboard with real-time timer display and Pomodoro progress and today's schedule, profile CRUD operations, calendar month navigation with session scheduling, dialog ViewModels for session start/unlock/master key/schedule flows.
+- **Views/** — XAML UI: main window with sidebar navigation, dashboard with timer visualization and profile cards, profiles editor, calendar month grid with day detail panel, statistics with charts/heatmap/goals, settings page with 5 grouped sections, schedule session dialog, start session dialog, unlock dialog, master key setup dialog.
+- **ViewModels/** — Application logic: dashboard with real-time timer display and Pomodoro progress and today's schedule, profile CRUD operations, calendar month navigation with session scheduling, statistics with period selection and chart data, settings with auto-persist on change, dialog ViewModels for session start/unlock/master key/schedule/goal flows.
 - **Controls/** — Custom WPF controls: `CircularProgressRing` renders a progress arc via `StreamGeometry`.
 - **Services/** — `NavigationService` (ViewModel-first page switching), `DialogService` (confirmation, file, and session dialogs), `BlockingOrchestrator` (bridges focus sessions to blocking engines — automatically activates blocking when a session starts and deactivates when it ends, keeps blocking active during Pomodoro breaks).
 - **Resources/** — Dark theme definition with color palette, button styles, and typography.
@@ -125,7 +126,7 @@ WPF desktop application using MVVM pattern:
 
 ### `tests/FocusGuard.Core.Tests/`
 
-176 xUnit tests using EF Core InMemory provider and Moq. Covers profile repository CRUD, domain validation/normalization, process name handling, password generation/validation, master key service, focus session manager (state transitions, unlock, Pomodoro cycling, events), Pomodoro interval calculator (interval sequences, long break placement, custom config), occurrence expander (all recurrence types, edge cases), strict mode service, heartbeat helpers, crash recovery, and session recovery.
+209 xUnit tests using EF Core InMemory provider and Moq. Covers profile repository CRUD, domain validation/normalization, process name handling, password generation/validation, master key service, focus session manager (state transitions, unlock, Pomodoro cycling, events), Pomodoro interval calculator (interval sequences, long break placement, custom config), occurrence expander (all recurrence types, edge cases), strict mode service, heartbeat helpers, crash recovery, and session recovery.
 
 ## Dependencies
 

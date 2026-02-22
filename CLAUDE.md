@@ -160,6 +160,20 @@ FocusGuard.sln
 - **Dashboard Enhancements** — `WeeklyMiniBarChart` custom control (7 bars), streak badge, goal progress section replacing "Coming Soon" placeholder
 - LiveCharts2 package: `LiveChartsCore.SkiaSharpView.WPF` v2.0.0-rc* (requires `net8.0-windows10.0.19041` TFM)
 
+### Settings View
+- `SettingsViewModel` — Transient, extends `ViewModelBase`. Injects `ISettingsRepository`, `IStrictModeService`, `IAutoStartService`, `MasterKeyService`, `IFocusSessionManager`, `IDialogService`, `ILogger`
+- 18 `[ObservableProperty]` fields across 5 groups: General, Session Defaults, Pomodoro, Notifications, Security
+- `OnNavigatedTo()` → `LoadSettingsAsync()` reads all keys from repo + services with `_isLoading` guard to prevent saves during load
+- Each property change uses `partial void On{Name}Changed(T value)` to persist immediately (skipped when `_isLoading`)
+  - Bool settings → `SetAsync(key, value.ToString())`; Int settings → `SetAsync(key, value.ToString())` with min 1 guard
+  - `AutoStartEnabled` → `IAutoStartService.Enable()` / `Disable()` (no-op in portable mode)
+  - `StrictModeEnabled` → `IStrictModeService.SetEnabledAsync(value)`, reverts UI on failure
+  - `PasswordDifficulty` → `SetAsync(key, value.ToString())`
+- `CanToggleStrictMode` — computed from `IStrictModeService.CanToggleAsync()` (false when session active)
+- `IsPortableMode` — readonly from `AppPaths.IsPortableMode`, disables auto-start checkbox
+- `RegenerateMasterKeyCommand` — confirmation dialog → reuses `MasterKeySetupDialog` + `MasterKeySetupViewModel`
+- **SettingsView** — ScrollViewer → StackPanel with 5 CardStyle sections. CheckBoxes for toggles, TextBoxes (LostFocus trigger) for numeric values, ComboBox for password difficulty, status indicator + DangerButton for master key
+
 ### UI Theme
 - Dark theme defined in `Resources/Theme.xaml`
 - Key colors: Background `#1E1E2E`, Surface `#2A2A3E`, Primary `#4A90D9`, Text `#ECEFF4`
@@ -290,7 +304,7 @@ src/FocusGuard.App/
 │   └── BlockingOrchestrator.cs         # Session + scheduling driven blocking: subscribes to StateChanged + SessionStarting events
 ├── ViewModels/
 │   ├── ViewModelBase.cs                # Abstract, inherits ObservableObject, virtual OnNavigatedTo()
-│   ├── MainWindowViewModel.cs          # CurrentView, nav commands (incl. Statistics)
+│   ├── MainWindowViewModel.cs          # CurrentView, nav commands (incl. Statistics, Settings)
 │   ├── DashboardViewModel.cs           # Session status, timer, Pomodoro, profiles, schedule, weekly chart, goals
 │   ├── ProfilesViewModel.cs            # Profile list CRUD, import/export
 │   ├── ProfileEditorViewModel.cs       # Edit profile: name, color, websites, apps, save/discard
@@ -299,6 +313,7 @@ src/FocusGuard.App/
 │   ├── SetGoalDialogViewModel.cs       # Goal period, target duration, confirm
 │   ├── ScheduleSessionDialogViewModel.cs # Profile, date/time, Pomodoro, recurrence config
 │   ├── StartSessionDialogViewModel.cs  # Duration presets, Pomodoro toggle, difficulty selector
+│   ├── SettingsViewModel.cs            # All settings: general, session, pomodoro, notifications, security
 │   ├── UnlockDialogViewModel.cs        # Password validation, emergency master key unlock
 │   └── MasterKeySetupViewModel.cs      # First-launch master key display and copy
 ├── Views/
@@ -307,6 +322,7 @@ src/FocusGuard.App/
 │   ├── ProfilesView.xaml / .xaml.cs    # Master-detail: profile list + editor
 │   ├── CalendarView.xaml / .xaml.cs    # Month grid + day detail panel with session list
 │   ├── StatisticsView.xaml / .xaml.cs  # Period selector, bar/pie charts, heatmap, streaks, goals
+│   ├── SettingsView.xaml / .xaml.cs    # 5-section settings page: general, session, pomodoro, notifications, security
 │   ├── SetGoalDialog.xaml / .xaml.cs   # Borderless dark modal: set focus goal
 │   ├── ScheduleSessionDialog.xaml / .cs # Borderless dark modal: schedule with recurrence
 │   ├── StartSessionDialog.xaml / .cs   # Borderless dark modal: duration, Pomodoro, difficulty
@@ -387,8 +403,8 @@ tests/FocusGuard.Core.Tests/
 | 2 — Pomodoro Timer Visualization | Done | CircularProgressRing, 1s tick timer, interval indicators, sound alerts |
 | 3 — Calendar & Scheduling | Done | Calendar month grid, schedule session dialog, recurring sessions, scheduling engine auto-activation, dashboard today's schedule |
 | 4 — Statistics & Analytics | Done | Charts, goals, streaks, session history, CSV export, heatmap |
-| 5 — System Tray & Notifications | Planned | Tray icon, toast notifications, floating overlay |
-| 6 — Settings View | Planned | Settings page for all configurable options |
+| 5 — System Tray & Notifications | Done | Tray icon, toast notifications, floating overlay |
+| 6 — Settings View | Done | Settings page with general, session defaults, pomodoro, notifications, and security sections |
 
 Phase implementation plans: `docs/validated-sprouting-anchor.md` (Phase 1), `docs/focus-session-timer.md` (Phase 2). UI feature plan: `docs/remaining-features.md`.
 

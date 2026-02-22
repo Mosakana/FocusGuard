@@ -10,6 +10,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FocusGuard.Core\FocusGuard.Core.csproj" />
   </ItemGroup>
 
@@ -22,6 +26,7 @@
     <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.*" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.*" />
     <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.0-rc*" />
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.*" />
   </ItemGroup>
 
 </Project>
