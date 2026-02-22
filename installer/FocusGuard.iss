@@ -2,7 +2,7 @@
 ; Requires Inno Setup 6.2+
 
 #define MyAppName "FocusGuard"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.0-beta.1"
 #define MyAppPublisher "FocusGuard"
 #define MyAppExeName "FocusGuard.App.exe"
 #define MyAppWatchdogExeName "FocusGuard.Watchdog.exe"
