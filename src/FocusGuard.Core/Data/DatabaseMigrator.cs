@@ -49,6 +49,31 @@ public class DatabaseMigrator
             ON FocusSessions (State);
         ");
 
+        // Phase 3: ScheduledSessions table
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ScheduledSessions (
+                Id TEXT PRIMARY KEY,
+                ProfileId TEXT NOT NULL,
+                StartTime TEXT NOT NULL,
+                EndTime TEXT NOT NULL,
+                IsRecurring INTEGER NOT NULL DEFAULT 0,
+                RecurrenceRule TEXT,
+                PomodoroEnabled INTEGER NOT NULL DEFAULT 0,
+                IsEnabled INTEGER NOT NULL DEFAULT 1,
+                CreatedAt TEXT NOT NULL
+            );
+        ");
+
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE INDEX IF NOT EXISTS IX_ScheduledSessions_ProfileId
+            ON ScheduledSessions (ProfileId);
+        ");
+
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE INDEX IF NOT EXISTS IX_ScheduledSessions_StartTime
+            ON ScheduledSessions (StartTime);
+        ");
+
         _logger.LogInformation("Database migrations completed");
     }
 }

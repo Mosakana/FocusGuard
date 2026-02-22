@@ -40,7 +40,7 @@
                             Command="{Binding NavigateToProfilesCommand}" />
                     <Button Content="&#x1F4C5;  Calendar"
                             Style="{StaticResource NavButtonStyle}"
-                            IsEnabled="False" />
+                            Command="{Binding NavigateToCalendarCommand}" />
                     <Button Content="&#x1F4CA;  Statistics"
                             Style="{StaticResource NavButtonStyle}"
                             IsEnabled="False" />

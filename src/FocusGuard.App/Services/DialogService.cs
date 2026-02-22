@@ -94,4 +94,26 @@ public class DialogService : IDialogService
             EmergencyUsed = vm.EmergencyUnlockUsed
         });
     }
+
+    public Task<ScheduleSessionDialogResult?> ShowScheduleSessionDialogAsync(
+        List<ProfileSummary> profiles, DateTime defaultDate)
+    {
+        var vm = new ScheduleSessionDialogViewModel
+        {
+            SessionDate = defaultDate
+        };
+        foreach (var p in profiles)
+            vm.AvailableProfiles.Add(p);
+        if (profiles.Count > 0)
+            vm.SelectedProfile = profiles[0];
+
+        var dialog = new ScheduleSessionDialog
+        {
+            DataContext = vm,
+            Owner = Application.Current.MainWindow
+        };
+
+        var ok = dialog.ShowDialog() == true;
+        return Task.FromResult(vm.GetResult());
+    }
 }

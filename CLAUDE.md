@@ -49,7 +49,7 @@ FocusGuard.sln
 - `DatabaseMigrator.MigrateAsync()` runs at startup after `EnsureCreated()` — idempotent
 - Blocked websites/applications stored as JSON string columns: `["youtube.com","reddit.com"]`
 - 3 seeded preset profiles: "Social Media", "Gaming", "Entertainment" (IsPreset=true, cannot be deleted)
-- Tables: `Profiles`, `FocusSessions` (session log with state tracking), `Settings` (key-value store)
+- Tables: `Profiles`, `FocusSessions` (session log with state tracking), `Settings` (key-value store), `ScheduledSessions` (calendar scheduling with recurrence)
 
 ### Security Layer
 - `PasswordGenerator` — Cryptographically random passwords via `System.Security.Cryptography.RandomNumberGenerator`
@@ -130,6 +130,19 @@ FocusGuard.sln
 - **Dashboard Timer Card** — Visible when session active: CircularProgressRing (140x140) with centered countdown (28px Consolas), interval label, Pomodoro dot indicators (filled via `IndexLessThanConverter`), session remaining text
 - **Converters** — `IntToRangeConverter` (int → `[0..N-1]` for ItemsControl), `IndexLessThanConverter` (MultiValueConverter: index < threshold → filled dot), `InverseBoolToVisibilityConverter`, `StringToVisibilityConverter`
 
+### Calendar & Scheduling
+- `ScheduledSessionEntity` — DB entity: Id, ProfileId, StartTime, EndTime, IsRecurring, RecurrenceRule (JSON), PomodoroEnabled, IsEnabled, CreatedAt
+- `IScheduledSessionRepository` — CRUD + `GetEnabledAsync()`, `GetByDateRangeAsync(start, end)`
+- `RecurrenceRule` — Type (Daily/Weekdays/Weekly/Custom), DaysOfWeek list, IntervalWeeks, EndDate
+- `OccurrenceExpander` — Expands `ScheduledSessionEntity` into concrete `ScheduledOccurrence` instances for a date range. Handles all 4 recurrence types day-by-day
+- `ISchedulingEngine` / `SchedulingEngine` — 15-second polling timer. Loads enabled sessions, expands for next 24h, fires `SessionStarting`/`SessionEnding` events. `HashSet<string>` tracks fired keys to prevent duplicates
+- `BlockingOrchestrator` subscribes to `ISchedulingEngine.SessionStarting` — auto-starts focus sessions when scheduled time arrives (if no session active)
+- **Calendar View** — Month grid (UniformGrid 6x7) with day-of-week headers, prev/next month arrows, Today button. Right side panel shows selected day's sessions with create/delete
+- **Schedule Session Dialog** — Borderless dark modal (480x560): profile ComboBox, DatePicker, hour:minute ComboBoxes, Pomodoro checkbox, recurring toggle with recurrence type + day checkboxes, optional end date. `ScheduleSessionDialogViewModel` converts local times to UTC
+- **Dashboard Integration** — "Today's Schedule" section shows upcoming sessions with profile color dot, time range, Pomodoro/recurring indicators. `LoadTodaySessionsAsync()` expands enabled sessions for current UTC day
+- `CalendarDay` — Date, IsCurrentMonth, IsToday, TimeBlocks collection
+- `CalendarTimeBlock` — ScheduledSessionId, ProfileId, ProfileName, ProfileColor, StartTime, EndTime, IsRecurring, PomodoroEnabled, computed TimeRangeDisplay and DurationMinutes
+
 ### UI Theme
 - Dark theme defined in `Resources/Theme.xaml`
 - Key colors: Background `#1E1E2E`, Surface `#2A2A3E`, Primary `#4A90D9`, Text `#ECEFF4`
@@ -139,7 +152,7 @@ FocusGuard.sln
 
 | Namespace | Purpose |
 |-----------|---------|
-| `FocusGuard.Core.Data.Entities` | EF Core entities (ProfileEntity, FocusSessionEntity, SettingEntity) |
+| `FocusGuard.Core.Data.Entities` | EF Core entities (ProfileEntity, FocusSessionEntity, SettingEntity, ScheduledSessionEntity) |
 | `FocusGuard.Core.Data.Repositories` | Repository interfaces and implementations |
 | `FocusGuard.Core.Data` | DbContext, DatabaseMigrator |
 | `FocusGuard.Core.Blocking` | Website & application blocking engines |
@@ -149,7 +162,8 @@ FocusGuard.sln
 | `FocusGuard.App.ViewModels` | All ViewModels |
 | `FocusGuard.App.Views` | All XAML Views |
 | `FocusGuard.App.Services` | NavigationService, DialogService, BlockingOrchestrator |
-| `FocusGuard.App.Models` | UI display models (ProfileSummary, ProfileListItem, StartSessionDialogResult, UnlockDialogResult) |
+| `FocusGuard.Core.Scheduling` | OccurrenceExpander, SchedulingEngine, RecurrenceRule, ScheduledOccurrence |
+| `FocusGuard.App.Models` | UI display models (ProfileSummary, ProfileListItem, StartSessionDialogResult, UnlockDialogResult, CalendarDay, CalendarTimeBlock, ScheduleSessionDialogResult) |
 | `FocusGuard.App.Controls` | Custom WPF controls (CircularProgressRing) |
 | `FocusGuard.Core.Hardening` | Strict mode, heartbeat, watchdog launcher, auto-start |
 | `FocusGuard.Core.Recovery` | Crash recovery, session recovery |
@@ -165,6 +179,7 @@ src/FocusGuard.Core/
 │   ├── Entities/
 │   │   ├── ProfileEntity.cs           # Id, Name, Color, BlockedWebsites(JSON), BlockedApplications(JSON), IsPreset
 │   │   ├── FocusSessionEntity.cs      # Id, ProfileId, StartTime, EndTime, State, PomodoroCompletedCount, WasUnlockedEarly
+│   │   ├── ScheduledSessionEntity.cs  # Id, ProfileId, StartTime, EndTime, IsRecurring, RecurrenceRule(JSON), PomodoroEnabled
 │   │   └── SettingEntity.cs           # Key (PK), Value — generic key-value settings store
 │   ├── Repositories/
 │   │   ├── IProfileRepository.cs      # GetAll, GetById, Create, Update, Delete, Exists
@@ -172,7 +187,9 @@ src/FocusGuard.Core/
 │   │   ├── ISettingsRepository.cs     # Get, Set, Exists — key-value settings access
 │   │   ├── SettingsRepository.cs      # IDbContextFactory-based implementation
 │   │   ├── IFocusSessionRepository.cs # Create, Update, GetById, GetActiveSession, GetRecent
-│   │   └── FocusSessionRepository.cs  # IDbContextFactory-based implementation (Singleton-safe)
+│   │   ├── FocusSessionRepository.cs  # IDbContextFactory-based implementation (Singleton-safe)
+│   │   ├── IScheduledSessionRepository.cs # CRUD + GetEnabled, GetByDateRange
+│   │   └── ScheduledSessionRepository.cs  # IDbContextFactory-based implementation
 │   ├── DatabaseMigrator.cs            # CREATE TABLE IF NOT EXISTS for Phase 2+ tables
 │   └── FocusGuardDbContext.cs          # DbSet<ProfileEntity/FocusSessionEntity/SettingEntity>, seeds 3 presets
 ├── Blocking/
@@ -205,6 +222,12 @@ src/FocusGuard.Core/
 │   ├── CrashRecoveryService.cs        # Runs at startup, marks orphaned sessions as Ended
 │   ├── ISessionRecoveryService.cs     # Resume session after crash
 │   └── SessionRecoveryService.cs      # Checks remaining time, calls ResumeSessionAsync or marks ended
+├── Scheduling/
+│   ├── RecurrenceRule.cs              # RecurrenceType enum (Daily/Weekdays/Weekly/Custom) + rule model
+│   ├── ScheduledOccurrence.cs         # Concrete occurrence: SessionId, ProfileId, Start/EndTime, Pomodoro
+│   ├── OccurrenceExpander.cs          # Expands ScheduledSessionEntity into occurrences for date range
+│   ├── ISchedulingEngine.cs           # Interface: Start, Stop, Refresh, SessionStarting/SessionEnding events
+│   └── SchedulingEngine.cs            # 15s polling timer, fires events when scheduled times arrive
 ├── Sessions/
 │   ├── FocusSessionState.cs           # Enum: Idle, Working, ShortBreak, LongBreak, Ended
 │   ├── FocusSessionInfo.cs            # Immutable snapshot record for current session
@@ -227,28 +250,35 @@ src/FocusGuard.App/
 ├── Services/
 │   ├── INavigationService.cs           # NavigateTo<T>(), CurrentView, CurrentViewChanged event
 │   ├── NavigationService.cs
-│   ├── IDialogService.cs               # ConfirmAsync, OpenFileAsync, SaveFileAsync, ShowStartSessionDialogAsync, ShowUnlockDialogAsync
+│   ├── IDialogService.cs               # ConfirmAsync, OpenFileAsync, SaveFileAsync, ShowStartSessionDialogAsync, ShowUnlockDialogAsync, ShowScheduleSessionDialogAsync
 │   ├── DialogService.cs                # IFocusSessionManager dependency for unlock dialog
-│   └── BlockingOrchestrator.cs         # Session-driven blocking: subscribes to IFocusSessionManager.StateChanged, auto-activates on Working, auto-deactivates on Idle
+│   └── BlockingOrchestrator.cs         # Session + scheduling driven blocking: subscribes to StateChanged + SessionStarting events
 ├── ViewModels/
 │   ├── ViewModelBase.cs                # Abstract, inherits ObservableObject, virtual OnNavigatedTo()
 │   ├── MainWindowViewModel.cs          # CurrentView, nav commands
-│   ├── DashboardViewModel.cs           # Session status, timer display, Pomodoro progress, profile cards
+│   ├── DashboardViewModel.cs           # Session status, timer display, Pomodoro progress, profile cards, today's schedule
 │   ├── ProfilesViewModel.cs            # Profile list CRUD, import/export
 │   ├── ProfileEditorViewModel.cs       # Edit profile: name, color, websites, apps, save/discard
+│   ├── CalendarViewModel.cs            # Month grid, day selection, scheduled session CRUD
+│   ├── ScheduleSessionDialogViewModel.cs # Profile, date/time, Pomodoro, recurrence config
 │   ├── StartSessionDialogViewModel.cs  # Duration presets, Pomodoro toggle, difficulty selector
 │   ├── UnlockDialogViewModel.cs        # Password validation, emergency master key unlock
 │   └── MasterKeySetupViewModel.cs      # First-launch master key display and copy
 ├── Views/
 │   ├── MainWindow.xaml / .xaml.cs      # Two-column: sidebar (220px) + content area
-│   ├── DashboardView.xaml / .xaml.cs   # Timer card with CircularProgressRing + profile cards
+│   ├── DashboardView.xaml / .xaml.cs   # Timer card, profile cards, today's schedule
 │   ├── ProfilesView.xaml / .xaml.cs    # Master-detail: profile list + editor
+│   ├── CalendarView.xaml / .xaml.cs    # Month grid + day detail panel with session list
+│   ├── ScheduleSessionDialog.xaml / .cs # Borderless dark modal: schedule with recurrence
 │   ├── StartSessionDialog.xaml / .cs   # Borderless dark modal: duration, Pomodoro, difficulty
 │   ├── UnlockDialog.xaml / .cs         # Borderless dark modal: password entry, emergency unlock
 │   └── MasterKeySetupDialog.xaml / .cs # First-launch master key dialog
 ├── Models/
 │   ├── ProfileSummary.cs               # Id, Name, Color, WebsiteCount, AppCount, IsPreset
 │   ├── ProfileListItem.cs              # Same shape as ProfileSummary
+│   ├── CalendarDay.cs                  # Date, IsCurrentMonth, IsToday, TimeBlocks
+│   ├── CalendarTimeBlock.cs            # ScheduledSessionId, ProfileId/Name/Color, Start/EndTime, TimeRangeDisplay
+│   ├── ScheduleSessionDialogResult.cs  # ProfileId, Start/EndTime, Pomodoro, IsRecurring, RecurrenceRule
 │   ├── StartSessionDialogResult.cs     # DurationMinutes, EnablePomodoro, Difficulty
 │   └── UnlockDialogResult.cs           # Unlocked, EmergencyUsed
 └── Converters/
@@ -285,6 +315,8 @@ tests/FocusGuard.Core.Tests/
 ├── Recovery/
 │   ├── CrashRecoveryServiceTests.cs     # Orphaned session cleanup (Working/ShortBreak/LongBreak), hosts cleanup
 │   └── SessionRecoveryServiceTests.cs   # No active → false, expired → ended, active → resumes
+├── Scheduling/
+│   └── OccurrenceExpanderTests.cs      # Non-recurring, Daily, Weekdays, Weekly, Bi-weekly, Custom, edge cases
 └── Sessions/
     ├── FocusSessionManagerTests.cs      # State transitions, unlock, emergency unlock, pomodoro, persistence, events, ResumeSessionAsync
     └── PomodoroIntervalCalculatorTests.cs # Interval sequence, long break placement, duration fitting, custom config
@@ -306,7 +338,7 @@ tests/FocusGuard.Core.Tests/
 |--------------|--------|-------------|
 | 1 — Session Interaction UI | Done | Start session dialog, unlock dialog, master key setup, dashboard integration |
 | 2 — Pomodoro Timer Visualization | Done | CircularProgressRing, 1s tick timer, interval indicators, sound alerts |
-| 3 — Calendar & Scheduling | Planned | Calendar view, drag-and-drop, recurring sessions, auto-activation |
+| 3 — Calendar & Scheduling | Done | Calendar month grid, schedule session dialog, recurring sessions, scheduling engine auto-activation, dashboard today's schedule |
 | 4 — Statistics & Analytics | Planned | Charts, goals, streaks, session history |
 | 5 — System Tray & Notifications | Planned | Tray icon, toast notifications, floating overlay |
 | 6 — Settings View | Planned | Settings page for all configurable options |

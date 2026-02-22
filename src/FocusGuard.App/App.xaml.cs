@@ -10,6 +10,7 @@ using FocusGuard.Core.Configuration;
 using FocusGuard.Core.Data;
 using FocusGuard.Core.Hardening;
 using FocusGuard.Core.Recovery;
+using FocusGuard.Core.Scheduling;
 using FocusGuard.Core.Sessions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -71,6 +72,7 @@ public partial class App : Application
                 services.AddTransient<DashboardViewModel>();
                 services.AddTransient<ProfilesViewModel>();
                 services.AddTransient<ProfileEditorViewModel>();
+                services.AddTransient<CalendarViewModel>();
                 services.AddSingleton<MainWindowViewModel>();
 
                 // Windows
@@ -145,6 +147,10 @@ public partial class App : Application
             var setupDialog = new Views.MasterKeySetupDialog { DataContext = setupVm };
             setupDialog.ShowDialog();
         }
+
+        // Start scheduling engine
+        var schedulingEngine = Services.GetRequiredService<ISchedulingEngine>();
+        await schedulingEngine.StartAsync();
 
         var mainWindow = Services.GetRequiredService<MainWindow>();
 

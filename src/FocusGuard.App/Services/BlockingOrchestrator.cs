@@ -2,6 +2,7 @@ using System.Text.Json;
 using FocusGuard.Core.Blocking;
 using FocusGuard.Core.Data.Repositories;
 using FocusGuard.Core.Hardening;
+using FocusGuard.Core.Scheduling;
 using FocusGuard.Core.Sessions;
 using Microsoft.Extensions.Logging;
 
@@ -16,6 +17,7 @@ public class BlockingOrchestrator
     private readonly IStrictModeService _strictModeService;
     private readonly IHeartbeatService _heartbeatService;
     private readonly IWatchdogLauncher _watchdogLauncher;
+    private readonly ISchedulingEngine _schedulingEngine;
     private readonly ILogger<BlockingOrchestrator> _logger;
 
     public bool IsActive { get; private set; }
@@ -31,6 +33,7 @@ public class BlockingOrchestrator
         IStrictModeService strictModeService,
         IHeartbeatService heartbeatService,
         IWatchdogLauncher watchdogLauncher,
+        ISchedulingEngine schedulingEngine,
         ILogger<BlockingOrchestrator> logger)
     {
         _websiteBlocker = websiteBlocker;
@@ -40,9 +43,11 @@ public class BlockingOrchestrator
         _strictModeService = strictModeService;
         _heartbeatService = heartbeatService;
         _watchdogLauncher = watchdogLauncher;
+        _schedulingEngine = schedulingEngine;
         _logger = logger;
 
         _sessionManager.StateChanged += OnSessionStateChanged;
+        _schedulingEngine.SessionStarting += OnScheduledSessionStarting;
     }
 
     public async Task ActivateProfileAsync(Guid profileId)
@@ -132,6 +137,26 @@ public class BlockingOrchestrator
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error handling session state change to {State}", state);
+        }
+    }
+
+    private async void OnScheduledSessionStarting(object? sender, ScheduledOccurrence occurrence)
+    {
+        try
+        {
+            if (_sessionManager.CurrentState != FocusSessionState.Idle)
+            {
+                _logger.LogInformation("Skipping scheduled session start — session already active");
+                return;
+            }
+
+            _logger.LogInformation("Auto-starting scheduled session for profile {ProfileId}", occurrence.ProfileId);
+            await _sessionManager.StartSessionAsync(
+                occurrence.ProfileId, occurrence.DurationMinutes, occurrence.PomodoroEnabled);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error auto-starting scheduled session");
         }
     }
 }

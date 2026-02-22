@@ -4,6 +4,7 @@ using FocusGuard.Core.Data;
 using FocusGuard.Core.Data.Repositories;
 using FocusGuard.Core.Hardening;
 using FocusGuard.Core.Recovery;
+using FocusGuard.Core.Scheduling;
 using FocusGuard.Core.Security;
 using FocusGuard.Core.Sessions;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +27,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IProfileRepository, ProfileRepository>();
         services.AddScoped<ISettingsRepository, SettingsRepository>();
         services.AddSingleton<IFocusSessionRepository, FocusSessionRepository>();
+        services.AddSingleton<IScheduledSessionRepository, ScheduledSessionRepository>();
 
         // Blocking engines
         services.AddSingleton<IWebsiteBlocker, HostsFileWebsiteBlocker>();
@@ -41,6 +43,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PomodoroIntervalCalculator>();
         services.AddSingleton<PomodoroTimer>();
         services.AddSingleton<SoundAlertService>();
+
+        // Scheduling
+        services.AddSingleton<OccurrenceExpander>();
+        services.AddSingleton<ISchedulingEngine, SchedulingEngine>();
 
         // Recovery
         services.AddSingleton<ICrashRecoveryService, CrashRecoveryService>();

@@ -10,6 +10,7 @@ public class FocusGuardDbContext : DbContext
     public DbSet<ProfileEntity> Profiles => Set<ProfileEntity>();
     public DbSet<FocusSessionEntity> FocusSessions => Set<FocusSessionEntity>();
     public DbSet<SettingEntity> Settings => Set<SettingEntity>();
+    public DbSet<ScheduledSessionEntity> ScheduledSessions => Set<ScheduledSessionEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,6 +33,13 @@ public class FocusGuardDbContext : DbContext
             entity.HasKey(e => e.Key);
             entity.Property(e => e.Key).HasMaxLength(100);
             entity.Property(e => e.Value).HasMaxLength(2000);
+        });
+
+        modelBuilder.Entity<ScheduledSessionEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.ProfileId);
+            entity.HasIndex(e => e.StartTime);
         });
 
         // Seed preset profiles

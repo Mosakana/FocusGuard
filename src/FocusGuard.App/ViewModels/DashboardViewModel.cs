@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using FocusGuard.App.Models;
 using FocusGuard.App.Services;
 using FocusGuard.Core.Data.Repositories;
+using FocusGuard.Core.Scheduling;
 using FocusGuard.Core.Security;
 using FocusGuard.Core.Sessions;
 using Microsoft.Extensions.Logging;
@@ -20,6 +21,8 @@ public partial class DashboardViewModel : ViewModelBase
     private readonly IDialogService _dialogService;
     private readonly PomodoroTimer _pomodoroTimer;
     private readonly SoundAlertService _soundAlertService;
+    private readonly IScheduledSessionRepository _scheduledSessionRepository;
+    private readonly OccurrenceExpander _occurrenceExpander;
     private readonly ILogger<DashboardViewModel> _logger;
 
     [ObservableProperty]
@@ -57,6 +60,7 @@ public partial class DashboardViewModel : ViewModelBase
     private int _pomodoroTotalIntervals;
 
     public ObservableCollection<ProfileSummary> Profiles { get; } = [];
+    public ObservableCollection<CalendarTimeBlock> TodaySessions { get; } = [];
 
     public DashboardViewModel(
         IProfileRepository profileRepository,
@@ -65,6 +69,8 @@ public partial class DashboardViewModel : ViewModelBase
         IDialogService dialogService,
         PomodoroTimer pomodoroTimer,
         SoundAlertService soundAlertService,
+        IScheduledSessionRepository scheduledSessionRepository,
+        OccurrenceExpander occurrenceExpander,
         ILogger<DashboardViewModel> logger)
     {
         _profileRepository = profileRepository;
@@ -73,6 +79,8 @@ public partial class DashboardViewModel : ViewModelBase
         _dialogService = dialogService;
         _pomodoroTimer = pomodoroTimer;
         _soundAlertService = soundAlertService;
+        _scheduledSessionRepository = scheduledSessionRepository;
+        _occurrenceExpander = occurrenceExpander;
         _logger = logger;
 
         // Subscribe to session state changes
@@ -87,6 +95,7 @@ public partial class DashboardViewModel : ViewModelBase
     public override async void OnNavigatedTo()
     {
         await LoadProfilesAsync();
+        await LoadTodaySessionsAsync();
         UpdateBlockingStatus();
     }
 
@@ -299,6 +308,44 @@ public partial class DashboardViewModel : ViewModelBase
         StatusText = IsPomodoroSession
             ? $"Active — \"{ActiveProfileName}\" (Pomodoro #{PomodoroCompletedCount + 1})"
             : $"Active — \"{ActiveProfileName}\" ({SessionTimeRemaining} remaining)";
+    }
+
+    private async Task LoadTodaySessionsAsync()
+    {
+        try
+        {
+            var today = DateTime.UtcNow.Date;
+            var tomorrow = today.AddDays(1);
+            var sessions = await _scheduledSessionRepository.GetEnabledAsync();
+            var profiles = await _profileRepository.GetAllAsync();
+            var profileLookup = profiles.ToDictionary(p => p.Id);
+
+            TodaySessions.Clear();
+
+            foreach (var session in sessions)
+            {
+                var occurrences = _occurrenceExpander.Expand(session, today, tomorrow);
+                foreach (var occ in occurrences)
+                {
+                    profileLookup.TryGetValue(occ.ProfileId, out var profile);
+                    TodaySessions.Add(new CalendarTimeBlock
+                    {
+                        ScheduledSessionId = occ.ScheduledSessionId,
+                        ProfileId = occ.ProfileId,
+                        ProfileName = profile?.Name ?? "Unknown",
+                        ProfileColor = profile?.Color ?? "#4A90D9",
+                        StartTime = occ.StartTime,
+                        EndTime = occ.EndTime,
+                        IsRecurring = session.IsRecurring,
+                        PomodoroEnabled = occ.PomodoroEnabled
+                    });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load today's sessions");
+        }
     }
 
     private void UpdateTimerFromSession(FocusSessionInfo? session)
