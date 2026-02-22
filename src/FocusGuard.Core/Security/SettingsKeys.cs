@@ -18,4 +18,9 @@ public static class SettingsKeys
     // Phase 5: Hardening
     public const string StrictModeEnabled = "app.strict_mode_enabled";
     public const string AutoStartEnabled = "app.auto_start_enabled";
+
+    // Phase 4: Goals
+    public const string GoalIndex = "goal.index";
+    public const string GoalDailyPrefix = "goal.daily";
+    public const string GoalWeeklyPrefix = "goal.weekly";
 }

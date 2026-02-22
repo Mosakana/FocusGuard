@@ -1,0 +1,221 @@
+<UserControl x:Class="FocusGuard.App.Views.StatisticsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+             xmlns:converters="clr-namespace:FocusGuard.App.Converters">
+    <UserControl.Resources>
+        <converters:HexToColorConverter x:Key="HexToColorConverter" />
+        <converters:ProgressWidthConverter x:Key="ProgressWidthConverter" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+            <!-- Heading -->
+            <TextBlock Text="Statistics" Style="{StaticResource HeadingStyle}" />
+
+            <!-- Period Selector Row -->
+            <Border Style="{StaticResource CardStyle}" Padding="12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Period Buttons -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <Button Content="Day" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,4,0"
+                                Command="{Binding SelectPeriodCommand}" CommandParameter="Day" />
+                        <Button Content="Week" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,4,0"
+                                Command="{Binding SelectPeriodCommand}" CommandParameter="Week" />
+                        <Button Content="Month" Style="{StaticResource SecondaryButtonStyle}"
+                                Command="{Binding SelectPeriodCommand}" CommandParameter="Month" />
+                    </StackPanel>
+
+                    <!-- Period Label -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Button Content="&#x25C0;" Style="{StaticResource SecondaryButtonStyle}" Padding="6,4" Margin="0,0,8,0"
+                                Command="{Binding PreviousPeriodCommand}" />
+                        <TextBlock Text="{Binding PeriodLabel}" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" />
+                        <Button Content="&#x25B6;" Style="{StaticResource SecondaryButtonStyle}" Padding="6,4" Margin="8,0,0,0"
+                                Command="{Binding NextPeriodCommand}" />
+                    </StackPanel>
+
+                    <!-- Export -->
+                    <Button Grid.Column="2" Content="Export CSV" Style="{StaticResource SecondaryButtonStyle}"
+                            Command="{Binding ExportCsvCommand}" />
+                </Grid>
+            </Border>
+
+            <!-- Summary Cards -->
+            <UniformGrid Columns="4" Margin="0,8,0,0">
+                <ItemsControl ItemsSource="{Binding SummaryCards}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="4" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource SurfaceBrush}" CornerRadius="10"
+                                    Padding="16" Margin="0,0,8,0">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding IconGlyph}" FontSize="20" Margin="0,0,0,4" />
+                                    <TextBlock Text="{Binding Value}" FontSize="22" FontWeight="Bold"
+                                               Foreground="{StaticResource TextBrush}" />
+                                    <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                                    <TextBlock Text="{Binding Subtitle}" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </UniformGrid>
+
+            <!-- Bar Chart: Daily Focus -->
+            <TextBlock Text="Daily Focus" Style="{StaticResource SubheadingStyle}" Margin="0,16,0,8" />
+            <Border Style="{StaticResource CardStyle}" Padding="12">
+                <lvc:CartesianChart Height="250"
+                                    Series="{Binding DailyFocusSeries}"
+                                    XAxes="{Binding XAxes}"
+                                    YAxes="{Binding YAxes}" />
+            </Border>
+
+            <!-- Two-column: Pie Chart + Heatmap -->
+            <Grid Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Profile Breakdown Pie Chart -->
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Profile Breakdown" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,8" />
+                    <Border Style="{StaticResource CardStyle}" Padding="12">
+                        <lvc:PieChart Height="220"
+                                      Series="{Binding ProfilePieSeries}" />
+                    </Border>
+                </StackPanel>
+
+                <!-- Heatmap -->
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="90-Day Heatmap" Style="{StaticResource SubheadingStyle}" Margin="0,0,0,8" />
+                    <Border Style="{StaticResource CardStyle}" Padding="12">
+                        <ItemsControl ItemsSource="{Binding HeatmapData}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="13" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="14" Height="14" Margin="1" CornerRadius="2"
+                                            Background="{Binding Color, Converter={StaticResource HexToColorConverter}}"
+                                            ToolTip="{Binding ToolTipText}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <!-- Streak Info -->
+            <TextBlock Text="Streaks" Style="{StaticResource SubheadingStyle}" Margin="0,16,0,8" />
+            <Border Style="{StaticResource CardStyle}" Padding="16">
+                <StackPanel Orientation="Horizontal">
+                    <StackPanel Margin="0,0,32,0">
+                        <TextBlock Text="Current Streak" FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <TextBlock Text="{Binding CurrentStreak}" FontSize="28" FontWeight="Bold"
+                                       Foreground="{StaticResource PrimaryBrush}" />
+                            <TextBlock Text=" days" FontSize="14" VerticalAlignment="Bottom" Margin="0,0,0,4"
+                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="Longest Streak" FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <TextBlock Text="{Binding LongestStreak}" FontSize="28" FontWeight="Bold"
+                                       Foreground="{StaticResource TextBrush}" />
+                            <TextBlock Text=" days" FontSize="14" VerticalAlignment="Bottom" Margin="0,0,0,4"
+                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Goals -->
+            <Grid Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Goals" Style="{StaticResource SubheadingStyle}" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="Set Goal" Style="{StaticResource PrimaryButtonStyle}"
+                        Command="{Binding SetGoalCommand}" />
+            </Grid>
+            <Border Style="{StaticResource CardStyle}" Margin="0,8,0,16" Padding="16">
+                <StackPanel>
+                    <!-- Empty state -->
+                    <TextBlock Text="No goals set. Click 'Set Goal' to get started!"
+                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource BodyTextStyle}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding GoalProgressItems.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Goal progress items -->
+                    <ItemsControl ItemsSource="{Binding GoalProgressItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,0,12">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding DisplayLabel}" FontSize="13"
+                                                   Foreground="{StaticResource TextBrush}" />
+                                        <TextBlock Grid.Column="1" FontSize="13"
+                                                   Foreground="{StaticResource TextSecondaryBrush}">
+                                            <Run Text="{Binding CurrentMinutes, StringFormat='{}{0:F0}m', Mode=OneWay}" />
+                                            <Run Text=" / " />
+                                            <Run Text="{Binding Goal.TargetMinutes, Mode=OneWay}" />
+                                            <Run Text="m" />
+                                        </TextBlock>
+                                    </Grid>
+                                    <!-- Progress bar -->
+                                    <Grid Height="8" Margin="0,4,0,0">
+                                        <Border Background="{StaticResource SurfaceLightBrush}" CornerRadius="4" />
+                                        <Border Background="{StaticResource PrimaryBrush}" CornerRadius="4"
+                                                HorizontalAlignment="Left">
+                                            <Border.Width>
+                                                <MultiBinding Converter="{StaticResource ProgressWidthConverter}">
+                                                    <Binding Path="CompletionPercent" />
+                                                    <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Grid}" />
+                                                </MultiBinding>
+                                            </Border.Width>
+                                        </Border>
+                                    </Grid>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

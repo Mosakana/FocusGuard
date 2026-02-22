@@ -228,20 +228,98 @@
                 </StackPanel>
             </Border>
 
-            <!-- Coming Soon Placeholder -->
-            <TextBlock Text="Coming Soon" Style="{StaticResource SubheadingStyle}" Margin="0,16,0,12" />
+            <!-- Weekly Overview & Goals -->
+            <TextBlock Text="Weekly Overview" Style="{StaticResource SubheadingStyle}" Margin="0,16,0,12" />
 
-            <WrapPanel>
-                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="20" Margin="0,0,12,12"
-                        Width="200" Opacity="0.5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Weekly Mini Bar Chart + Streak -->
+                <Border Grid.Column="0" Style="{StaticResource CardStyle}" Padding="16">
                     <StackPanel>
-                        <TextBlock Text="&#x1F4CA; Statistics" FontSize="14" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextSecondaryBrush}" />
-                        <TextBlock Text="Track your productivity" FontSize="12"
-                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0" />
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding WeeklyFocusDisplay}" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextBrush}" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <TextBlock Text="{Binding CurrentStreak}" FontSize="14" FontWeight="Bold"
+                                           Foreground="{StaticResource PrimaryBrush}" />
+                                <TextBlock Text=" day streak" FontSize="12"
+                                           Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Grid>
+                        <controls:WeeklyMiniBarChart Height="80"
+                            Values="{Binding WeeklyChartValues}"
+                            BarColor="{StaticResource PrimaryBrush}" />
                     </StackPanel>
                 </Border>
-            </WrapPanel>
+
+                <!-- Goal Progress -->
+                <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="16">
+                    <StackPanel>
+                        <TextBlock Text="Goal Progress" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}" Margin="0,0,0,8" />
+
+                        <!-- Empty state -->
+                        <TextBlock Text="No goals set" FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding GoalProgressItems.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <ItemsControl ItemsSource="{Binding GoalProgressItems}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,0,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding DisplayLabel}" FontSize="12"
+                                                       Foreground="{StaticResource TextBrush}" />
+                                            <TextBlock Grid.Column="1" FontSize="12"
+                                                       Foreground="{StaticResource TextSecondaryBrush}">
+                                                <Run Text="{Binding CompletionPercent, StringFormat='{}{0:F0}%', Mode=OneWay}" />
+                                            </TextBlock>
+                                        </Grid>
+                                        <Grid Height="6" Margin="0,4,0,0">
+                                            <Border Background="{StaticResource SurfaceLightBrush}" CornerRadius="3" />
+                                            <Border Background="{StaticResource PrimaryBrush}" CornerRadius="3"
+                                                    HorizontalAlignment="Left">
+                                                <Border.Width>
+                                                    <MultiBinding>
+                                                        <MultiBinding.Converter>
+                                                            <converters:ProgressWidthConverter />
+                                                        </MultiBinding.Converter>
+                                                        <Binding Path="CompletionPercent" />
+                                                        <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Grid}" />
+                                                    </MultiBinding>
+                                                </Border.Width>
+                                            </Border>
+                                        </Grid>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Grid>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

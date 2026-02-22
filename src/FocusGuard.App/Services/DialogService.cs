@@ -3,6 +3,7 @@ using FocusGuard.App.Models;
 using FocusGuard.App.ViewModels;
 using FocusGuard.App.Views;
 using FocusGuard.Core.Sessions;
+using FocusGuard.Core.Statistics;
 using Microsoft.Win32;
 
 namespace FocusGuard.App.Services;
@@ -108,6 +109,20 @@ public class DialogService : IDialogService
             vm.SelectedProfile = profiles[0];
 
         var dialog = new ScheduleSessionDialog
+        {
+            DataContext = vm,
+            Owner = Application.Current.MainWindow
+        };
+
+        var ok = dialog.ShowDialog() == true;
+        return Task.FromResult(vm.GetResult());
+    }
+
+    public Task<FocusGoal?> ShowSetGoalDialogAsync()
+    {
+        var vm = new SetGoalDialogViewModel();
+
+        var dialog = new SetGoalDialog
         {
             DataContext = vm,
             Owner = Application.Current.MainWindow

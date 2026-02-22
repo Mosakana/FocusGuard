@@ -74,6 +74,32 @@ public class DatabaseMigrator
             ON ScheduledSessions (StartTime);
         ");
 
+        // Phase 4: BlockedAttempts table
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS BlockedAttempts (
+                Id TEXT PRIMARY KEY,
+                SessionId TEXT,
+                Timestamp TEXT NOT NULL,
+                Type TEXT NOT NULL DEFAULT '',
+                Target TEXT NOT NULL DEFAULT ''
+            );
+        ");
+
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE INDEX IF NOT EXISTS IX_BlockedAttempts_Timestamp
+            ON BlockedAttempts (Timestamp);
+        ");
+
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE INDEX IF NOT EXISTS IX_BlockedAttempts_SessionId
+            ON BlockedAttempts (SessionId);
+        ");
+
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE INDEX IF NOT EXISTS IX_FocusSessions_StartTime
+            ON FocusSessions (StartTime);
+        ");
+
         _logger.LogInformation("Database migrations completed");
     }
 }

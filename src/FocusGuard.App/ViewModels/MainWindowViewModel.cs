@@ -28,4 +28,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private void NavigateToCalendar() => _navigationService.NavigateTo<CalendarViewModel>();
+
+    [RelayCommand]
+    private void NavigateToStatistics() => _navigationService.NavigateTo<StatisticsViewModel>();
 }

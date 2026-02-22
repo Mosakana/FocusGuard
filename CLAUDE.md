@@ -49,7 +49,7 @@ FocusGuard.sln
 - `DatabaseMigrator.MigrateAsync()` runs at startup after `EnsureCreated()` — idempotent
 - Blocked websites/applications stored as JSON string columns: `["youtube.com","reddit.com"]`
 - 3 seeded preset profiles: "Social Media", "Gaming", "Entertainment" (IsPreset=true, cannot be deleted)
-- Tables: `Profiles`, `FocusSessions` (session log with state tracking), `Settings` (key-value store), `ScheduledSessions` (calendar scheduling with recurrence)
+- Tables: `Profiles`, `FocusSessions` (session log with state tracking), `Settings` (key-value store), `ScheduledSessions` (calendar scheduling with recurrence), `BlockedAttempts` (blocked attempt log with timestamps)
 
 ### Security Layer
 - `PasswordGenerator` — Cryptographically random passwords via `System.Security.Cryptography.RandomNumberGenerator`
@@ -143,6 +143,23 @@ FocusGuard.sln
 - `CalendarDay` — Date, IsCurrentMonth, IsToday, TimeBlocks collection
 - `CalendarTimeBlock` — ScheduledSessionId, ProfileId, ProfileName, ProfileColor, StartTime, EndTime, IsRecurring, PomodoroEnabled, computed TimeRangeDisplay and DurationMinutes
 
+### Statistics & Analytics
+- `BlockedAttemptEntity` — Id, SessionId (nullable), Timestamp, Type ("Application"/"Website"), Target
+- `IBlockedAttemptRepository` — CRUD + GetBySessionId, GetByDateRange, GetCountByDateRange
+- `BlockedAttemptLogger` — Singleton, subscribes to `IApplicationBlocker.ProcessBlocked`, logs to DB. Exposes `AttemptLogged` event
+- `DailyFocusSummary` — record: Date, TotalFocusMinutes, SessionCount, PomodoroCount, BlockedAttemptCount
+- `ProfileFocusSummary` — record: ProfileId, ProfileName, ProfileColor, TotalFocusMinutes, SessionCount
+- `StreakInfo` — record: CurrentStreak, LongestStreak, StreakStartDate
+- `PeriodStatistics` — record: PeriodStart/End, totals, DailyBreakdown, ProfileBreakdown, Streak
+- `IStatisticsService` / `StatisticsService` — Queries completed sessions + blocked attempts, groups by day/profile, calculates streaks (consecutive days with >=1 min focus). Zero-fills missing days for heatmap
+- `FocusGoal` — GoalPeriod (Daily/Weekly), TargetMinutes, ProfileId (nullable = global)
+- `GoalProgress` — record: Goal, CurrentMinutes, CompletionPercent, IsCompleted, RemainingMinutes, DisplayLabel
+- `IGoalService` / `GoalService` — Stores goals as JSON in Settings table. Key scheme: `"goal.daily"`, `"goal.weekly"`, `"goal.daily.{profileId}"`. Meta key `"goal.index"` tracks active goal keys
+- `CsvExporter` — ExportSessionsAsync, ExportDailySummaryAsync. CSV-safe: escape commas/quotes, prefix injection chars
+- **Statistics View** — Period selector (Day/Week/Month), 4 summary cards, bar chart (LiveCharts2 ColumnSeries), pie chart (profile breakdown), 90-day heatmap (pure WPF UniformGrid), streak info, goal progress bars with Set Goal dialog
+- **Dashboard Enhancements** — `WeeklyMiniBarChart` custom control (7 bars), streak badge, goal progress section replacing "Coming Soon" placeholder
+- LiveCharts2 package: `LiveChartsCore.SkiaSharpView.WPF` v2.0.0-rc* (requires `net8.0-windows10.0.19041` TFM)
+
 ### UI Theme
 - Dark theme defined in `Resources/Theme.xaml`
 - Key colors: Background `#1E1E2E`, Surface `#2A2A3E`, Primary `#4A90D9`, Text `#ECEFF4`
@@ -167,6 +184,7 @@ FocusGuard.sln
 | `FocusGuard.App.Controls` | Custom WPF controls (CircularProgressRing) |
 | `FocusGuard.Core.Hardening` | Strict mode, heartbeat, watchdog launcher, auto-start |
 | `FocusGuard.Core.Recovery` | Crash recovery, session recovery |
+| `FocusGuard.Core.Statistics` | BlockedAttemptLogger, StatisticsService, GoalService, CsvExporter, models |
 | `FocusGuard.App.Converters` | WPF value converters |
 
 ## File Layout
@@ -180,6 +198,7 @@ src/FocusGuard.Core/
 │   │   ├── ProfileEntity.cs           # Id, Name, Color, BlockedWebsites(JSON), BlockedApplications(JSON), IsPreset
 │   │   ├── FocusSessionEntity.cs      # Id, ProfileId, StartTime, EndTime, State, PomodoroCompletedCount, WasUnlockedEarly
 │   │   ├── ScheduledSessionEntity.cs  # Id, ProfileId, StartTime, EndTime, IsRecurring, RecurrenceRule(JSON), PomodoroEnabled
+│   │   ├── BlockedAttemptEntity.cs    # Id, SessionId (nullable), Timestamp, Type, Target
 │   │   └── SettingEntity.cs           # Key (PK), Value — generic key-value settings store
 │   ├── Repositories/
 │   │   ├── IProfileRepository.cs      # GetAll, GetById, Create, Update, Delete, Exists
@@ -189,7 +208,9 @@ src/FocusGuard.Core/
 │   │   ├── IFocusSessionRepository.cs # Create, Update, GetById, GetActiveSession, GetRecent
 │   │   ├── FocusSessionRepository.cs  # IDbContextFactory-based implementation (Singleton-safe)
 │   │   ├── IScheduledSessionRepository.cs # CRUD + GetEnabled, GetByDateRange
-│   │   └── ScheduledSessionRepository.cs  # IDbContextFactory-based implementation
+│   │   ├── ScheduledSessionRepository.cs  # IDbContextFactory-based implementation
+│   │   ├── IBlockedAttemptRepository.cs   # Create, GetBySessionId, GetByDateRange, GetCountByDateRange
+│   │   └── BlockedAttemptRepository.cs    # IDbContextFactory-based implementation
 │   ├── DatabaseMigrator.cs            # CREATE TABLE IF NOT EXISTS for Phase 2+ tables
 │   └── FocusGuardDbContext.cs          # DbSet<ProfileEntity/FocusSessionEntity/SettingEntity>, seeds 3 presets
 ├── Blocking/
@@ -238,6 +259,19 @@ src/FocusGuard.Core/
 │   ├── PomodoroIntervalCalculator.cs  # Pure logic: CalculateIntervals, GetNextInterval
 │   ├── PomodoroTimer.cs               # 1-second tick timer: drives UI refresh, manages interval transitions
 │   └── SoundAlertService.cs           # System sounds on interval/session transitions (SystemSounds)
+├── Statistics/
+│   ├── BlockedAttemptLogger.cs        # Subscribes to ProcessBlocked, logs to DB, fires AttemptLogged
+│   ├── CsvExporter.cs                 # Export sessions/daily summary to CSV with injection prevention
+│   ├── DailyFocusSummary.cs           # Record: Date, TotalFocusMinutes, SessionCount, PomodoroCount, BlockedAttemptCount
+│   ├── FocusGoal.cs                   # GoalPeriod enum + FocusGoal model
+│   ├── GoalProgress.cs                # Record: Goal, CurrentMinutes, CompletionPercent, IsCompleted
+│   ├── GoalService.cs                 # JSON-based goal storage in Settings table
+│   ├── IGoalService.cs                # Get/Set/Remove goal, GetAllProgressAsync
+│   ├── IStatisticsService.cs          # Period stats, streaks, daily focus, profile breakdown, heatmap
+│   ├── PeriodStatistics.cs            # Record: period totals + daily/profile breakdowns
+│   ├── ProfileFocusSummary.cs         # Record: ProfileId, ProfileName, TotalFocusMinutes
+│   ├── StatisticsService.cs           # Queries sessions + blocked attempts, groups, calculates streaks
+│   └── StreakInfo.cs                  # Record: CurrentStreak, LongestStreak, StreakStartDate
 └── ServiceCollectionExtensions.cs      # AddFocusGuardCore() extension method
 
 src/FocusGuard.App/
@@ -246,7 +280,8 @@ src/FocusGuard.App/
 ├── Resources/
 │   └── Theme.xaml                      # Dark theme colors, button/text/card styles
 ├── Controls/
-│   └── CircularProgressRing.cs         # Custom FrameworkElement: progress arc via StreamGeometry
+│   ├── CircularProgressRing.cs         # Custom FrameworkElement: progress arc via StreamGeometry
+│   └── WeeklyMiniBarChart.cs           # Custom FrameworkElement: 7 vertical bars + day labels
 ├── Services/
 │   ├── INavigationService.cs           # NavigateTo<T>(), CurrentView, CurrentViewChanged event
 │   ├── NavigationService.cs
@@ -255,20 +290,24 @@ src/FocusGuard.App/
 │   └── BlockingOrchestrator.cs         # Session + scheduling driven blocking: subscribes to StateChanged + SessionStarting events
 ├── ViewModels/
 │   ├── ViewModelBase.cs                # Abstract, inherits ObservableObject, virtual OnNavigatedTo()
-│   ├── MainWindowViewModel.cs          # CurrentView, nav commands
-│   ├── DashboardViewModel.cs           # Session status, timer display, Pomodoro progress, profile cards, today's schedule
+│   ├── MainWindowViewModel.cs          # CurrentView, nav commands (incl. Statistics)
+│   ├── DashboardViewModel.cs           # Session status, timer, Pomodoro, profiles, schedule, weekly chart, goals
 │   ├── ProfilesViewModel.cs            # Profile list CRUD, import/export
 │   ├── ProfileEditorViewModel.cs       # Edit profile: name, color, websites, apps, save/discard
 │   ├── CalendarViewModel.cs            # Month grid, day selection, scheduled session CRUD
+│   ├── StatisticsViewModel.cs          # Period selector, summary cards, charts, heatmap, goals, export
+│   ├── SetGoalDialogViewModel.cs       # Goal period, target duration, confirm
 │   ├── ScheduleSessionDialogViewModel.cs # Profile, date/time, Pomodoro, recurrence config
 │   ├── StartSessionDialogViewModel.cs  # Duration presets, Pomodoro toggle, difficulty selector
 │   ├── UnlockDialogViewModel.cs        # Password validation, emergency master key unlock
 │   └── MasterKeySetupViewModel.cs      # First-launch master key display and copy
 ├── Views/
 │   ├── MainWindow.xaml / .xaml.cs      # Two-column: sidebar (220px) + content area
-│   ├── DashboardView.xaml / .xaml.cs   # Timer card, profile cards, today's schedule
+│   ├── DashboardView.xaml / .xaml.cs   # Timer card, profile cards, schedule, weekly chart, goals
 │   ├── ProfilesView.xaml / .xaml.cs    # Master-detail: profile list + editor
 │   ├── CalendarView.xaml / .xaml.cs    # Month grid + day detail panel with session list
+│   ├── StatisticsView.xaml / .xaml.cs  # Period selector, bar/pie charts, heatmap, streaks, goals
+│   ├── SetGoalDialog.xaml / .xaml.cs   # Borderless dark modal: set focus goal
 │   ├── ScheduleSessionDialog.xaml / .cs # Borderless dark modal: schedule with recurrence
 │   ├── StartSessionDialog.xaml / .cs   # Borderless dark modal: duration, Pomodoro, difficulty
 │   ├── UnlockDialog.xaml / .cs         # Borderless dark modal: password entry, emergency unlock
@@ -278,6 +317,8 @@ src/FocusGuard.App/
 │   ├── ProfileListItem.cs              # Same shape as ProfileSummary
 │   ├── CalendarDay.cs                  # Date, IsCurrentMonth, IsToday, TimeBlocks
 │   ├── CalendarTimeBlock.cs            # ScheduledSessionId, ProfileId/Name/Color, Start/EndTime, TimeRangeDisplay
+│   ├── StatsSummaryCard.cs             # Title, Value, Subtitle, IconGlyph
+│   ├── HeatmapDay.cs                   # Date, FocusMinutes, IntensityLevel, Color, ToolTipText
 │   ├── ScheduleSessionDialogResult.cs  # ProfileId, Start/EndTime, Pomodoro, IsRecurring, RecurrenceRule
 │   ├── StartSessionDialogResult.cs     # DurationMinutes, EnablePomodoro, Difficulty
 │   └── UnlockDialogResult.cs           # Unlocked, EmergencyUsed
@@ -288,7 +329,8 @@ src/FocusGuard.App/
     ├── InverseBoolToVisibilityConverter.cs  # true → Collapsed, false → Visible
     ├── StringToVisibilityConverter.cs  # non-empty string → Visible
     ├── IntToRangeConverter.cs          # int N → [0..N-1] list for ItemsControl
-    └── IndexLessThanConverter.cs       # MultiValueConverter: index < threshold → true (Pomodoro dots)
+    ├── IndexLessThanConverter.cs       # MultiValueConverter: index < threshold → true (Pomodoro dots)
+    └── ProgressWidthConverter.cs       # MultiValueConverter: percent × width → pixel width (goal bars)
 
 src/FocusGuard.Watchdog/
 ├── FocusGuard.Watchdog.csproj          # net8.0-windows WinExe, no Core dependency
@@ -301,7 +343,8 @@ installer/
 
 tests/FocusGuard.Core.Tests/
 ├── Data/
-│   └── ProfileRepositoryTests.cs       # CRUD, preset protection, duplicate name (InMemory provider)
+│   ├── ProfileRepositoryTests.cs       # CRUD, preset protection, duplicate name (InMemory provider)
+│   └── BlockedAttemptRepositoryTests.cs # CRUD, date range, count
 ├── Blocking/
 │   ├── DomainHelperTests.cs             # Normalize, Expand, IsValid
 │   └── ProcessHelperTests.cs            # NormalizeProcessName, GetRunningProcessNames
@@ -317,9 +360,13 @@ tests/FocusGuard.Core.Tests/
 │   └── SessionRecoveryServiceTests.cs   # No active → false, expired → ended, active → resumes
 ├── Scheduling/
 │   └── OccurrenceExpanderTests.cs      # Non-recurring, Daily, Weekdays, Weekly, Bi-weekly, Custom, edge cases
-└── Sessions/
-    ├── FocusSessionManagerTests.cs      # State transitions, unlock, emergency unlock, pomodoro, persistence, events, ResumeSessionAsync
-    └── PomodoroIntervalCalculatorTests.cs # Interval sequence, long break placement, duration fitting, custom config
+├── Sessions/
+│   ├── FocusSessionManagerTests.cs      # State transitions, unlock, emergency unlock, pomodoro, persistence, events, ResumeSessionAsync
+│   └── PomodoroIntervalCalculatorTests.cs # Interval sequence, long break placement, duration fitting, custom config
+└── Statistics/
+    ├── StatisticsServiceTests.cs        # Empty range, single/multiple sessions, daily grouping, profile breakdown, streak, heatmap
+    ├── GoalServiceTests.cs              # Set/get/remove, progress calculation, profile-specific goals
+    └── CsvExporterTests.cs              # Correct escaping, injection prevention, empty dataset
 ```
 
 ## Development Phases
@@ -339,7 +386,7 @@ tests/FocusGuard.Core.Tests/
 | 1 — Session Interaction UI | Done | Start session dialog, unlock dialog, master key setup, dashboard integration |
 | 2 — Pomodoro Timer Visualization | Done | CircularProgressRing, 1s tick timer, interval indicators, sound alerts |
 | 3 — Calendar & Scheduling | Done | Calendar month grid, schedule session dialog, recurring sessions, scheduling engine auto-activation, dashboard today's schedule |
-| 4 — Statistics & Analytics | Planned | Charts, goals, streaks, session history |
+| 4 — Statistics & Analytics | Done | Charts, goals, streaks, session history, CSV export, heatmap |
 | 5 — System Tray & Notifications | Planned | Tray icon, toast notifications, floating overlay |
 | 6 — Settings View | Planned | Settings page for all configurable options |
 

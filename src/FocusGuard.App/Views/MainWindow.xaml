@@ -43,7 +43,7 @@
                             Command="{Binding NavigateToCalendarCommand}" />
                     <Button Content="&#x1F4CA;  Statistics"
                             Style="{StaticResource NavButtonStyle}"
-                            IsEnabled="False" />
+                            Command="{Binding NavigateToStatisticsCommand}" />
                     <Button Content="&#x2699;  Settings"
                             Style="{StaticResource NavButtonStyle}"
                             IsEnabled="False" />

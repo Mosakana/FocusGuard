@@ -1,4 +1,5 @@
 using FocusGuard.App.Models;
+using FocusGuard.Core.Statistics;
 
 namespace FocusGuard.App.Services;
 
@@ -10,4 +11,5 @@ public interface IDialogService
     Task<StartSessionDialogResult?> ShowStartSessionDialogAsync(Guid profileId, string profileName, string profileColor);
     Task<UnlockDialogResult?> ShowUnlockDialogAsync(string generatedPassword);
     Task<ScheduleSessionDialogResult?> ShowScheduleSessionDialogAsync(List<ProfileSummary> profiles, DateTime defaultDate);
+    Task<FocusGoal?> ShowSetGoalDialogAsync();
 }

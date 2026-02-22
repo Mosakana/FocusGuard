@@ -10,4 +10,5 @@ public interface IFocusSessionRepository
     Task<FocusSessionEntity?> GetActiveSessionAsync();
     Task<List<FocusSessionEntity>> GetRecentAsync(int count = 10);
     Task<List<FocusSessionEntity>> GetOrphanedSessionsAsync();
+    Task<List<FocusSessionEntity>> GetByDateRangeAsync(DateTime start, DateTime end);
 }

@@ -7,6 +7,7 @@ using FocusGuard.Core.Recovery;
 using FocusGuard.Core.Scheduling;
 using FocusGuard.Core.Security;
 using FocusGuard.Core.Sessions;
+using FocusGuard.Core.Statistics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -57,6 +58,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IWatchdogLauncher, WatchdogLauncher>();
         services.AddSingleton<IAutoStartService, AutoStartService>();
         services.AddSingleton<ISessionRecoveryService, SessionRecoveryService>();
+
+        // Statistics
+        services.AddSingleton<IBlockedAttemptRepository, BlockedAttemptRepository>();
+        services.AddSingleton<BlockedAttemptLogger>();
+        services.AddSingleton<IStatisticsService, StatisticsService>();
+        services.AddSingleton<IGoalService, GoalService>();
+        services.AddSingleton<CsvExporter>();
 
         return services;
     }

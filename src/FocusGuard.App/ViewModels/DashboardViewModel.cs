@@ -9,6 +9,7 @@ using FocusGuard.Core.Data.Repositories;
 using FocusGuard.Core.Scheduling;
 using FocusGuard.Core.Security;
 using FocusGuard.Core.Sessions;
+using FocusGuard.Core.Statistics;
 using Microsoft.Extensions.Logging;
 
 namespace FocusGuard.App.ViewModels;
@@ -23,6 +24,8 @@ public partial class DashboardViewModel : ViewModelBase
     private readonly SoundAlertService _soundAlertService;
     private readonly IScheduledSessionRepository _scheduledSessionRepository;
     private readonly OccurrenceExpander _occurrenceExpander;
+    private readonly IStatisticsService _statisticsService;
+    private readonly IGoalService _goalService;
     private readonly ILogger<DashboardViewModel> _logger;
 
     [ObservableProperty]
@@ -59,6 +62,17 @@ public partial class DashboardViewModel : ViewModelBase
     [ObservableProperty]
     private int _pomodoroTotalIntervals;
 
+    // Dashboard statistics
+    [ObservableProperty]
+    private double[] _weeklyChartValues = new double[7];
+
+    [ObservableProperty]
+    private int _currentStreak;
+
+    [ObservableProperty]
+    private string _weeklyFocusDisplay = string.Empty;
+
+    public ObservableCollection<GoalProgress> GoalProgressItems { get; } = [];
     public ObservableCollection<ProfileSummary> Profiles { get; } = [];
     public ObservableCollection<CalendarTimeBlock> TodaySessions { get; } = [];
 
@@ -71,6 +85,8 @@ public partial class DashboardViewModel : ViewModelBase
         SoundAlertService soundAlertService,
         IScheduledSessionRepository scheduledSessionRepository,
         OccurrenceExpander occurrenceExpander,
+        IStatisticsService statisticsService,
+        IGoalService goalService,
         ILogger<DashboardViewModel> logger)
     {
         _profileRepository = profileRepository;
@@ -81,6 +97,8 @@ public partial class DashboardViewModel : ViewModelBase
         _soundAlertService = soundAlertService;
         _scheduledSessionRepository = scheduledSessionRepository;
         _occurrenceExpander = occurrenceExpander;
+        _statisticsService = statisticsService;
+        _goalService = goalService;
         _logger = logger;
 
         // Subscribe to session state changes
@@ -96,6 +114,7 @@ public partial class DashboardViewModel : ViewModelBase
     {
         await LoadProfilesAsync();
         await LoadTodaySessionsAsync();
+        await LoadStatsSummaryAsync();
         UpdateBlockingStatus();
     }
 
@@ -241,6 +260,46 @@ public partial class DashboardViewModel : ViewModelBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load profiles");
+        }
+    }
+
+    private async Task LoadStatsSummaryAsync()
+    {
+        try
+        {
+            // Weekly chart: get daily focus for this week (Mon-Sun)
+            var today = DateTime.UtcNow.Date;
+            var daysSinceMonday = ((int)today.DayOfWeek + 6) % 7;
+            var weekStart = today.AddDays(-daysSinceMonday);
+            var weekEnd = weekStart.AddDays(7);
+
+            var daily = await _statisticsService.GetDailyFocusAsync(weekStart, weekEnd);
+            var values = new double[7];
+            foreach (var d in daily)
+            {
+                var idx = ((int)d.Date.DayOfWeek + 6) % 7; // Mon=0, Sun=6
+                if (idx >= 0 && idx < 7)
+                    values[idx] = d.TotalFocusMinutes;
+            }
+            WeeklyChartValues = values;
+
+            var weeklyTotal = values.Sum();
+            var hours = weeklyTotal / 60;
+            WeeklyFocusDisplay = hours >= 1 ? $"{hours:F1}h this week" : $"{weeklyTotal:F0}m this week";
+
+            // Streak
+            var streak = await _statisticsService.GetStreakInfoAsync();
+            CurrentStreak = streak.CurrentStreak;
+
+            // Goals
+            var progress = await _goalService.GetAllProgressAsync();
+            GoalProgressItems.Clear();
+            foreach (var g in progress)
+                GoalProgressItems.Add(g);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load stats summary");
         }
     }
 

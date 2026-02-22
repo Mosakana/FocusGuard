@@ -12,6 +12,7 @@ using FocusGuard.Core.Hardening;
 using FocusGuard.Core.Recovery;
 using FocusGuard.Core.Scheduling;
 using FocusGuard.Core.Sessions;
+using FocusGuard.Core.Statistics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -73,6 +74,7 @@ public partial class App : Application
                 services.AddTransient<ProfilesViewModel>();
                 services.AddTransient<ProfileEditorViewModel>();
                 services.AddTransient<CalendarViewModel>();
+                services.AddTransient<StatisticsViewModel>();
                 services.AddSingleton<MainWindowViewModel>();
 
                 // Windows
@@ -151,6 +153,9 @@ public partial class App : Application
         // Start scheduling engine
         var schedulingEngine = Services.GetRequiredService<ISchedulingEngine>();
         await schedulingEngine.StartAsync();
+
+        // Resolve BlockedAttemptLogger singleton so it subscribes to events
+        _ = Services.GetRequiredService<BlockedAttemptLogger>();
 
         var mainWindow = Services.GetRequiredService<MainWindow>();
 

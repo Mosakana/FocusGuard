@@ -76,4 +76,13 @@ public class FocusSessionRepository : IFocusSessionRepository
             .Where(s => s.State != "Ended" && s.State != "Idle")
             .ToListAsync();
     }
+
+    public async Task<List<FocusSessionEntity>> GetByDateRangeAsync(DateTime start, DateTime end)
+    {
+        await using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.FocusSessions
+            .Where(s => s.State == "Ended" && s.StartTime >= start && s.StartTime < end)
+            .OrderBy(s => s.StartTime)
+            .ToListAsync();
+    }
 }
