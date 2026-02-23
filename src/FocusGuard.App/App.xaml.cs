@@ -145,7 +145,11 @@ public partial class App : Application
             await crashRecovery.RecoverAsync();
         }
 
-        // Master key setup on first launch
+        // Resolve MainWindow early so WPF knows the real main window
+        var mainWindow = Services.GetRequiredService<MainWindow>();
+        MainWindow = mainWindow;
+
+        // Master key setup on first launch (shown before main window)
         var masterKeyService = Services.GetRequiredService<FocusGuard.Core.Security.MasterKeyService>();
         if (!await masterKeyService.IsSetupCompleteAsync())
         {
@@ -167,8 +171,6 @@ public partial class App : Application
         Services.GetRequiredService<IOverlayService>().Initialize();
         Services.GetRequiredService<INotificationService>().Initialize();
 
-        var mainWindow = Services.GetRequiredService<MainWindow>();
-
         if (isMinimized)
         {
             mainWindow.WindowState = WindowState.Minimized;
@@ -184,35 +186,56 @@ public partial class App : Application
         Log.Information("FocusGuard started");
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    /// <summary>
+    /// Performs full cleanup and terminates the process.
+    /// Called directly from MainWindow close and tray Exit — does NOT rely on
+    /// WPF's Shutdown()/OnExit() chain which can fail with OnExplicitShutdown.
+    /// </summary>
+    public static void PerformShutdown()
     {
         Log.Information("FocusGuard shutting down");
 
-        // Dispose tray/overlay/notifications before emergency cleanup
-        try
+        // 1. UI-thread-only work (tray icon must be disposed on its creator thread,
+        //    mutex must be released on the thread that acquired it)
+        try { (Services?.GetService<ITrayIconService>() as IDisposable)?.Dispose(); } catch { }
+        try { _singleInstanceMutex?.ReleaseMutex(); } catch { }
+        try { _singleInstanceMutex?.Dispose(); } catch { }
+
+        // 2. Fire off background cleanup (hosts file, blocker, host stop)
+        //    Don't block the UI thread — Environment.Exit kills everything anyway
+        Task.Run(() =>
         {
-            (Services?.GetService<INotificationService>() as IDisposable)?.Dispose();
-            (Services?.GetService<IOverlayService>() as IDisposable)?.Dispose();
-            (Services?.GetService<ITrayIconService>() as IDisposable)?.Dispose();
-            ToastNotificationManagerCompat.Uninstall();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Error disposing tray/overlay/notification services");
-        }
+            try
+            {
+                Services?.GetService<IWebsiteBlocker>()?.RemoveBlocklistAsync().GetAwaiter().GetResult();
+                var appBlocker = Services?.GetService<IApplicationBlocker>();
+                if (appBlocker?.IsActive == true) appBlocker.StopBlocking();
+                Services?.GetService<IHeartbeatService>()?.Stop();
+            }
+            catch { }
 
-        EmergencyCleanup();
+            try { (Services?.GetService<IOverlayService>() as IDisposable)?.Dispose(); } catch { }
+            try { (Services?.GetService<INotificationService>() as IDisposable)?.Dispose(); } catch { }
+            try { ToastNotificationManagerCompat.Uninstall(); } catch { }
 
-        if (_host is not null)
-        {
-            await _host.StopAsync();
-            _host.Dispose();
-        }
+            try
+            {
+                (Current as App)?._host?.StopAsync(TimeSpan.FromSeconds(1)).GetAwaiter().GetResult();
+            }
+            catch { }
 
-        _singleInstanceMutex?.ReleaseMutex();
-        _singleInstanceMutex?.Dispose();
+            Log.CloseAndFlush();
+        });
 
-        await Log.CloseAndFlushAsync();
+        // 3. Give background cleanup a brief moment for the critical hosts file restore,
+        //    then terminate. OS cleans up the rest.
+        Thread.Sleep(500);
+        Environment.Exit(0);
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        // Safety net — PerformShutdown() should have already run
         base.OnExit(e);
     }
 

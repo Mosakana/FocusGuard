@@ -134,10 +134,7 @@ public class TrayIconService : ITrayIconService
             return;
         }
 
-        Application.Current?.Dispatcher.InvokeAsync(() =>
-        {
-            Application.Current.Shutdown();
-        });
+        App.PerformShutdown();
     }
 
     private static void RestoreMainWindow()

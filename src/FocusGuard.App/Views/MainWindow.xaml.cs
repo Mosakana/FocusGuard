@@ -56,22 +56,44 @@ public partial class MainWindow : Window
 
         if (isSessionActive)
         {
-            // During active session: strict mode prevents close entirely;
-            // otherwise hide to tray instead of closing
+            // During active session: strict mode prevents close entirely
             if (await _strictModeService.IsEnabledAsync())
             {
                 e.Cancel = true;
                 return;
             }
 
-            // Hide to tray instead of closing
+            // Active session without strict mode: hide to tray
             e.Cancel = true;
             Hide();
             ShowInTaskbar = false;
             return;
         }
 
+        // No active session: check minimize-to-tray setting
+        try
+        {
+            using var scope = App.Services.CreateScope();
+            var settings = scope.ServiceProvider.GetRequiredService<ISettingsRepository>();
+            var value = settings.GetAsync(SettingsKeys.MinimizeToTray).GetAwaiter().GetResult();
+
+            if (value is not null && bool.TryParse(value, out var minimizeToTray) && minimizeToTray)
+            {
+                // Hide to tray instead of closing
+                e.Cancel = true;
+                Hide();
+                ShowInTaskbar = false;
+                return;
+            }
+        }
+        catch
+        {
+            // Settings not available — proceed with close
+        }
+
+        // Actually closing: perform full cleanup and exit process
         base.OnClosing(e);
+        App.PerformShutdown();
     }
 
     public void RestoreFromTray()
