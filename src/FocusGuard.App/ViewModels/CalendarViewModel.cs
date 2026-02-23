@@ -83,7 +83,13 @@ public partial class CalendarViewModel : ViewModelBase
     private void SelectDay(CalendarDay? day)
     {
         if (day is null) return;
+
+        // Clear previous selection
+        if (SelectedDay is not null)
+            SelectedDay.IsSelected = false;
+
         SelectedDay = day;
+        day.IsSelected = true;
 
         SelectedDayBlocks.Clear();
         foreach (var block in day.TimeBlocks)

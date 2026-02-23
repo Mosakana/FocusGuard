@@ -59,10 +59,10 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Border Margin="1" Padding="4" MinHeight="64" CornerRadius="4" Cursor="Hand"
-                                Background="{StaticResource SurfaceBrush}"
                                 MouseLeftButtonDown="DayCell_MouseLeftButtonDown">
                             <Border.Style>
                                 <Style TargetType="Border">
+                                    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsCurrentMonth}" Value="False">
                                             <Setter Property="Opacity" Value="0.4" />
@@ -70,6 +70,12 @@
                                         <DataTrigger Binding="{Binding IsToday}" Value="True">
                                             <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
                                             <Setter Property="BorderThickness" Value="2" />
+                                        </DataTrigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#2E2E42" />
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource SurfaceLightBrush}" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>

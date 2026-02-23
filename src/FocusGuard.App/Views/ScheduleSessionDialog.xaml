@@ -35,8 +35,6 @@
                     <!-- Date -->
                     <TextBlock Text="Date" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" Margin="0,0,0,4" />
                     <DatePicker SelectedDate="{Binding SessionDate}"
-                                Background="{StaticResource SurfaceLightBrush}"
-                                Foreground="{StaticResource TextBrush}"
                                 Margin="0,0,0,12" />
 
                     <!-- Time Range -->
@@ -99,8 +97,7 @@
 
                         <TextBlock Text="End Date (optional)" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" Margin="0,0,0,4" />
                         <DatePicker SelectedDate="{Binding RecurrenceEndDate}"
-                                    Background="{StaticResource SurfaceLightBrush}"
-                                    Foreground="{StaticResource TextBrush}" Width="180" HorizontalAlignment="Left" />
+                                    Width="180" HorizontalAlignment="Left" />
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>
