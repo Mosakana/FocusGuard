@@ -4,6 +4,20 @@ All notable changes to FocusGuard will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Start Session dialog now shows **Pomodoro cycle count selector** (2/4/6/8 or custom) when Pomodoro mode is enabled, replacing the raw duration picker — total duration is auto-calculated from cycles × work + breaks
+- DialogService loads Pomodoro configuration from settings so cycle duration display reflects custom work/break values
+
+### Fixed
+- Non-Pomodoro sessions now update the dashboard timer and overlay countdown every second (added DispatcherTimer fallback)
+- Hosts file blocker uses `0.0.0.0` instead of `127.0.0.1` for faster blocking
+- Hosts file writes retry up to 5 times when the file is locked by DNS client or antivirus
+- Hosts file blocker catches `UnauthorizedAccessException` alongside `IOException`
+- Hosts file blocker clears readonly attribute before writing
+- DNS flush now also restarts the DNS Client service for a more thorough cache clear
+
 ## [1.0.0-beta.1] - 2025-02-22
 
 First public beta release. All core features are implemented and functional.

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using FocusGuard.Core.Sessions;
 
@@ -8,6 +9,7 @@ public partial class TimerOverlayViewModel : ObservableObject, IDisposable
 {
     private readonly IFocusSessionManager _sessionManager;
     private readonly PomodoroTimer _pomodoroTimer;
+    private readonly DispatcherTimer _simpleSessionTimer;
     private bool _disposed;
 
     [ObservableProperty]
@@ -36,8 +38,21 @@ public partial class TimerOverlayViewModel : ObservableObject, IDisposable
         _pomodoroTimer.IntervalStarted += OnIntervalStarted;
         _sessionManager.StateChanged += OnSessionStateChanged;
 
+        // 1-second timer for non-Pomodoro session UI updates
+        _simpleSessionTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _simpleSessionTimer.Tick += OnSimpleSessionTick;
+
         // Initialize from current state
         UpdateFromSession();
+
+        // If an active non-Pomodoro session already exists (overlay created after StateChanged fired),
+        // start the simple timer immediately since we missed the event.
+        var currentState = _sessionManager.CurrentState;
+        if (currentState is not (FocusSessionState.Idle or FocusSessionState.Ended)
+            && !_pomodoroTimer.IsRunning)
+        {
+            _simpleSessionTimer.Start();
+        }
     }
 
     private void OnTimerTick(object? sender, EventArgs e)
@@ -81,9 +96,33 @@ public partial class TimerOverlayViewModel : ObservableObject, IDisposable
         });
     }
 
+    private void OnSimpleSessionTick(object? sender, EventArgs e)
+    {
+        var session = _sessionManager.CurrentSession;
+        if (session is null)
+        {
+            _simpleSessionTimer.Stop();
+            return;
+        }
+        UpdateFromSession();
+    }
+
     private void OnSessionStateChanged(object? sender, FocusSessionState state)
     {
-        Application.Current?.Dispatcher.InvokeAsync(UpdateFromSession);
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            UpdateFromSession();
+
+            // Start/stop the simple timer based on session state and pomodoro mode
+            var session = _sessionManager.CurrentSession;
+            var isActive = state is not (FocusSessionState.Idle or FocusSessionState.Ended);
+            var isPomodoroRunning = _pomodoroTimer.IsRunning;
+
+            if (isActive && !isPomodoroRunning)
+                _simpleSessionTimer.Start();
+            else
+                _simpleSessionTimer.Stop();
+        });
     }
 
     private void UpdateFromSession()
@@ -91,6 +130,7 @@ public partial class TimerOverlayViewModel : ObservableObject, IDisposable
         var session = _sessionManager.CurrentSession;
         if (session is null)
         {
+            _simpleSessionTimer.Stop();
             TimerDisplay = "00:00";
             TimerProgress = 0;
             IntervalLabel = string.Empty;
@@ -142,6 +182,8 @@ public partial class TimerOverlayViewModel : ObservableObject, IDisposable
         if (_disposed) return;
         _disposed = true;
 
+        _simpleSessionTimer.Stop();
+        _simpleSessionTimer.Tick -= OnSimpleSessionTick;
         _pomodoroTimer.TimerTick -= OnTimerTick;
         _pomodoroTimer.IntervalStarted -= OnIntervalStarted;
         _sessionManager.StateChanged -= OnSessionStateChanged;

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FocusGuard.App.Models;
@@ -27,6 +28,7 @@ public partial class DashboardViewModel : ViewModelBase
     private readonly IStatisticsService _statisticsService;
     private readonly IGoalService _goalService;
     private readonly ILogger<DashboardViewModel> _logger;
+    private readonly DispatcherTimer _simpleSessionTimer;
 
     [ObservableProperty]
     private string _statusText = "Idle — No active focus session";
@@ -108,6 +110,10 @@ public partial class DashboardViewModel : ViewModelBase
         _pomodoroTimer.TimerTick += OnTimerTick;
         _pomodoroTimer.IntervalStarted += OnIntervalStarted;
         _pomodoroTimer.IntervalCompleted += OnIntervalCompleted;
+
+        // 1-second timer for non-Pomodoro session UI updates
+        _simpleSessionTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _simpleSessionTimer.Tick += OnSimpleSessionTick;
     }
 
     public override async void OnNavigatedTo()
@@ -143,6 +149,11 @@ public partial class DashboardViewModel : ViewModelBase
             {
                 await _pomodoroTimer.StartAsync();
                 await _soundAlertService.PlayWorkStartAsync();
+            }
+            else
+            {
+                // Start a simple 1-second UI timer for non-Pomodoro sessions
+                _simpleSessionTimer.Start();
             }
 
             UpdateBlockingStatus();
@@ -186,6 +197,19 @@ public partial class DashboardViewModel : ViewModelBase
                 await _soundAlertService.PlaySessionEndAsync();
             }
         });
+    }
+
+    private void OnSimpleSessionTick(object? sender, EventArgs e)
+    {
+        var session = _orchestrator.SessionManager.CurrentSession;
+        if (session is null)
+        {
+            _simpleSessionTimer.Stop();
+            return;
+        }
+
+        UpdateTimerFromSession(session);
+        UpdateSessionRemaining();
     }
 
     private void OnTimerTick(object? sender, EventArgs e)
@@ -340,6 +364,7 @@ public partial class DashboardViewModel : ViewModelBase
         }
         else
         {
+            _simpleSessionTimer.Stop();
             ActiveProfileName = string.Empty;
             SessionTimeRemaining = string.Empty;
             StatusText = "Idle — No active focus session";

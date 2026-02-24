@@ -2,6 +2,8 @@ using System.Windows;
 using FocusGuard.App.Models;
 using FocusGuard.App.ViewModels;
 using FocusGuard.App.Views;
+using FocusGuard.Core.Data.Repositories;
+using FocusGuard.Core.Security;
 using FocusGuard.Core.Sessions;
 using FocusGuard.Core.Statistics;
 using Microsoft.Win32;
@@ -11,10 +13,12 @@ namespace FocusGuard.App.Services;
 public class DialogService : IDialogService
 {
     private readonly IFocusSessionManager _sessionManager;
+    private readonly ISettingsRepository _settingsRepository;
 
-    public DialogService(IFocusSessionManager sessionManager)
+    public DialogService(IFocusSessionManager sessionManager, ISettingsRepository settingsRepository)
     {
         _sessionManager = sessionManager;
+        _settingsRepository = settingsRepository;
     }
 
     public Task<bool> ConfirmAsync(string title, string message)
@@ -44,14 +48,17 @@ public class DialogService : IDialogService
         return Task.FromResult(dialog.ShowDialog() == true ? dialog.FileName : null);
     }
 
-    public Task<StartSessionDialogResult?> ShowStartSessionDialogAsync(
+    public async Task<StartSessionDialogResult?> ShowStartSessionDialogAsync(
         Guid profileId, string profileName, string profileColor)
     {
+        var config = await LoadPomodoroConfigAsync();
+
         var vm = new StartSessionDialogViewModel
         {
             ProfileId = profileId,
             ProfileName = profileName,
-            ProfileColor = profileColor
+            ProfileColor = profileColor,
+            PomodoroConfig = config
         };
 
         var dialog = new StartSessionDialog
@@ -62,14 +69,37 @@ public class DialogService : IDialogService
 
         var ok = dialog.ShowDialog() == true;
         if (!ok || !vm.Confirmed)
-            return Task.FromResult<StartSessionDialogResult?>(null);
+            return null;
 
-        return Task.FromResult<StartSessionDialogResult?>(new StartSessionDialogResult
+        return new StartSessionDialogResult
         {
             DurationMinutes = vm.DurationMinutes,
             EnablePomodoro = vm.EnablePomodoro,
             Difficulty = vm.SelectedDifficulty
-        });
+        };
+    }
+
+    private async Task<PomodoroConfiguration> LoadPomodoroConfigAsync()
+    {
+        var config = new PomodoroConfiguration();
+
+        var workStr = await _settingsRepository.GetAsync(SettingsKeys.PomodoroWorkMinutes);
+        if (int.TryParse(workStr, out var work) && work > 0)
+            config.WorkMinutes = work;
+
+        var shortStr = await _settingsRepository.GetAsync(SettingsKeys.PomodoroShortBreakMinutes);
+        if (int.TryParse(shortStr, out var shortBreak) && shortBreak > 0)
+            config.ShortBreakMinutes = shortBreak;
+
+        var longStr = await _settingsRepository.GetAsync(SettingsKeys.PomodoroLongBreakMinutes);
+        if (int.TryParse(longStr, out var longBreak) && longBreak > 0)
+            config.LongBreakMinutes = longBreak;
+
+        var intervalStr = await _settingsRepository.GetAsync(SettingsKeys.PomodoroLongBreakInterval);
+        if (int.TryParse(intervalStr, out var interval) && interval > 0)
+            config.LongBreakInterval = interval;
+
+        return config;
     }
 
     public Task<UnlockDialogResult?> ShowUnlockDialogAsync(string generatedPassword)

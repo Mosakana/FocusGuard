@@ -47,7 +47,7 @@ public class HostsFileWebsiteBlocker : IWebsiteBlocker
 
             _logger.LogInformation("Applied blocklist: {Count} domains", allDomains.Count);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _logger.LogError(ex, "Failed to modify hosts file. It may be locked by antivirus software.");
             throw;
@@ -69,7 +69,7 @@ public class HostsFileWebsiteBlocker : IWebsiteBlocker
 
             _logger.LogInformation("Removed blocklist from hosts file");
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _logger.LogError(ex, "Failed to restore hosts file");
             throw;
@@ -104,17 +104,41 @@ public class HostsFileWebsiteBlocker : IWebsiteBlocker
             sb.AppendLine(MarkerStart);
             foreach (var domain in domains)
             {
-                sb.AppendLine($"127.0.0.1 {domain}");
+                sb.AppendLine($"0.0.0.0 {domain}");
             }
             sb.AppendLine(MarkerEnd);
         }
 
         sb.AppendLine();
 
-        // Atomic write: write to temp file then replace
+        // Clean up stale temp file from previous failed attempt
         var tempPath = HostsFilePath + ".focusguard.tmp";
-        await File.WriteAllTextAsync(tempPath, sb.ToString());
-        File.Move(tempPath, HostsFilePath, overwrite: true);
+        try { File.Delete(tempPath); } catch { /* ignore */ }
+
+        // Retry loop: hosts file can be briefly locked by DNS client or antivirus
+        const int maxRetries = 5;
+        for (var attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                // Clear readonly attribute if set
+                var hostsFile = new FileInfo(HostsFilePath);
+                if (hostsFile.Exists && hostsFile.IsReadOnly)
+                {
+                    hostsFile.IsReadOnly = false;
+                }
+
+                // Write directly to hosts file (avoid temp+move which is unreliable on system files)
+                await File.WriteAllTextAsync(HostsFilePath, sb.ToString());
+                return;
+            }
+            catch (Exception ex) when (attempt < maxRetries && (ex is IOException or UnauthorizedAccessException))
+            {
+                _logger.LogWarning("Hosts file write attempt {Attempt}/{Max} failed: {Message}. Retrying...",
+                    attempt, maxRetries, ex.Message);
+                await Task.Delay(200 * attempt);
+            }
+        }
     }
 
     private static string RemoveFocusGuardBlock(string content)
@@ -147,23 +171,38 @@ public class HostsFileWebsiteBlocker : IWebsiteBlocker
 
     private async Task FlushDnsAsync()
     {
+        // Flush Windows DNS resolver cache
+        await RunCommandAsync("ipconfig", "/flushdns");
+
+        // Also restart the DNS Client service for a more thorough flush
+        // (net stop may fail on some Windows editions where dnscache is protected)
+        await RunCommandAsync("net", "stop dnscache");
+        await RunCommandAsync("net", "start dnscache");
+    }
+
+    private async Task RunCommandAsync(string fileName, string arguments)
+    {
         try
         {
-            var psi = new ProcessStartInfo("ipconfig", "/flushdns")
+            var psi = new ProcessStartInfo(fileName, arguments)
             {
                 CreateNoWindow = true,
                 UseShellExecute = false,
-                RedirectStandardOutput = true
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
             };
             using var process = Process.Start(psi);
             if (process is not null)
             {
+                // Must read stdout/stderr to prevent buffer deadlock
+                await process.StandardOutput.ReadToEndAsync();
+                await process.StandardError.ReadToEndAsync();
                 await process.WaitForExitAsync();
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to flush DNS cache");
+            _logger.LogWarning(ex, "Failed to run {Command}", $"{fileName} {arguments}");
         }
     }
 }
