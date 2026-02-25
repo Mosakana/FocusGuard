@@ -23,8 +23,12 @@ public class DialogService : IDialogService
 
     public Task<bool> ConfirmAsync(string title, string message)
     {
-        var result = MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question);
-        return Task.FromResult(result == MessageBoxResult.Yes);
+        var dialog = new ConfirmDialog(title, message)
+        {
+            Owner = Application.Current.MainWindow
+        };
+        var result = dialog.ShowDialog() == true;
+        return Task.FromResult(result);
     }
 
     public Task<string?> OpenFileAsync(string filter, string title = "Open File")

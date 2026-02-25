@@ -4,11 +4,20 @@ All notable changes to FocusGuard will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0] - 2026-02-25
+
+### Added
+- **App icon** —
+- **Custom dark title bar** — replaced default Windows chrome with WindowChrome-based title bar matching the dark theme; includes icon, app name, minimize/maximize/close buttons; WM_GETMINMAXINFO hook prevents maximized window from covering taskbar
+- **Custom confirm dialog** — replaced system MessageBox with dark-themed borderless confirm dialog matching the app's visual style
+- **Dark scrollbar** — slim 8px scrollbar with rounded thumb; hover and drag color feedback
+- **Dark checkbox** — rounded checkbox with primary blue fill and white checkmark when checked
+- Icon generation script (`tools/GenerateIcon.ps1`) for reproducible icon builds
 
 ### Changed
 - Start Session dialog now shows **Pomodoro cycle count selector** (2/4/6/8 or custom) when Pomodoro mode is enabled, replacing the raw duration picker — total duration is auto-calculated from cycles × work + breaks
 - DialogService loads Pomodoro configuration from settings so cycle duration display reflects custom work/break values
+- Version bumped to 1.0.0
 
 ### Fixed
 - Non-Pomodoro sessions now update the dashboard timer and overlay countdown every second (added DispatcherTimer fallback)
@@ -17,6 +26,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Hosts file blocker catches `UnauthorizedAccessException` alongside `IOException`
 - Hosts file blocker clears readonly attribute before writing
 - DNS flush now also restarts the DNS Client service for a more thorough cache clear
+- Auto-start checkbox in portable mode now shows tooltip on hover (added `ToolTipService.ShowOnDisabled` and faster `InitialShowDelay`)
 
 ## [1.0.0-beta.1] - 2025-02-22
 
@@ -100,4 +110,5 @@ First public beta release. All core features are implemented and functional.
 - Requires administrator privileges (hosts file modification + process termination)
 - Inno Setup installer included
 
+[1.0.0]: https://github.com/Mosakana/FocusGuard/releases/tag/v1.0.0
 [1.0.0-beta.1]: https://github.com/Mosakana/FocusGuard/releases/tag/v1.0.0-beta.1

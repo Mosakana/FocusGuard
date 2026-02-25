@@ -22,9 +22,11 @@
                             <TextBlock Text="Launch FocusGuard when Windows starts" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,2,0,0" />
                         </StackPanel>
                         <CheckBox Grid.Column="1" IsChecked="{Binding AutoStartEnabled}" VerticalAlignment="Center"
-                                  IsEnabled="{Binding IsPortableMode, Converter={StaticResource InverseBoolConverter}}">
+                                  IsEnabled="{Binding IsPortableMode, Converter={StaticResource InverseBoolConverter}}"
+                                  ToolTipService.ShowOnDisabled="True"
+                                  ToolTipService.InitialShowDelay="200">
                             <CheckBox.Style>
-                                <Style TargetType="CheckBox">
+                                <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsPortableMode}" Value="True">
                                             <Setter Property="ToolTip" Value="Auto-start is not available in portable mode" />

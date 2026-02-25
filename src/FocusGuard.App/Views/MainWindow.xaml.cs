@@ -1,4 +1,8 @@
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using FocusGuard.App.ViewModels;
 using FocusGuard.Core.Data.Repositories;
 using FocusGuard.Core.Hardening;
@@ -23,9 +27,38 @@ public partial class MainWindow : Window
         _strictModeService = strictModeService;
     }
 
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+
+        // Install WM_GETMINMAXINFO hook to prevent maximized window from covering taskbar
+        var source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+        source?.AddHook(WndProc);
+    }
+
+    private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+
+    private void MaximizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+    }
+
+    private void CloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
     protected override void OnStateChanged(EventArgs e)
     {
         base.OnStateChanged(e);
+
+        // Toggle maximize/restore icon
+        UpdateMaximizeIcon();
 
         if (WindowState == WindowState.Minimized)
         {
@@ -46,6 +79,22 @@ public partial class MainWindow : Window
             {
                 // Settings not available — ignore
             }
+        }
+    }
+
+    private void UpdateMaximizeIcon()
+    {
+        if (MaximizeIcon is null) return;
+
+        if (WindowState == WindowState.Maximized)
+        {
+            // Restore icon: two overlapping rectangles
+            MaximizeIcon.Data = Geometry.Parse("M 2,0 L 10,0 L 10,8 L 8,8 L 8,10 L 0,10 L 0,2 L 2,2 Z M 2,2 L 8,2 L 8,8 L 2,8 Z");
+        }
+        else
+        {
+            // Maximize icon: single rectangle
+            MaximizeIcon.Data = Geometry.Parse("M 0,0 L 10,0 L 10,10 L 0,10 Z");
         }
     }
 
@@ -103,4 +152,78 @@ public partial class MainWindow : Window
         ShowInTaskbar = true;
         Activate();
     }
+
+    #region WM_GETMINMAXINFO — Prevent maximized window from covering taskbar
+
+    private const int WM_GETMINMAXINFO = 0x0024;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public POINT ptReserved;
+        public POINT ptMaxSize;
+        public POINT ptMaxPosition;
+        public POINT ptMinTrackSize;
+        public POINT ptMaxTrackSize;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public int dwFlags;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_GETMINMAXINFO)
+        {
+            var mmi = Marshal.PtrToStructure<MINMAXINFO>(lParam);
+            var monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            if (monitor != IntPtr.Zero)
+            {
+                var monitorInfo = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+                if (GetMonitorInfo(monitor, ref monitorInfo))
+                {
+                    var work = monitorInfo.rcWork;
+                    var mon = monitorInfo.rcMonitor;
+                    mmi.ptMaxPosition.X = work.Left - mon.Left;
+                    mmi.ptMaxPosition.Y = work.Top - mon.Top;
+                    mmi.ptMaxSize.X = work.Right - work.Left;
+                    mmi.ptMaxSize.Y = work.Bottom - work.Top;
+                }
+            }
+            Marshal.StructureToPtr(mmi, lParam, true);
+            handled = true;
+        }
+        return IntPtr.Zero;
+    }
+
+    #endregion
 }
