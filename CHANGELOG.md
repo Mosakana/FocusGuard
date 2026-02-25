@@ -7,12 +7,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 ## [1.0.0] - 2026-02-25
 
 ### Added
-- **App icon** —
+- **App icon**
 - **Custom dark title bar** — replaced default Windows chrome with WindowChrome-based title bar matching the dark theme; includes icon, app name, minimize/maximize/close buttons; WM_GETMINMAXINFO hook prevents maximized window from covering taskbar
 - **Custom confirm dialog** — replaced system MessageBox with dark-themed borderless confirm dialog matching the app's visual style
 - **Dark scrollbar** — slim 8px scrollbar with rounded thumb; hover and drag color feedback
 - **Dark checkbox** — rounded checkbox with primary blue fill and white checkmark when checked
-- Icon generation script (`tools/GenerateIcon.ps1`) for reproducible icon builds
+
 
 ### Changed
 - Start Session dialog now shows **Pomodoro cycle count selector** (2/4/6/8 or custom) when Pomodoro mode is enabled, replacing the raw duration picker — total duration is auto-calculated from cycles × work + breaks
